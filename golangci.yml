@@ -1,0 +1,63 @@
+# Specifies the configuration file format version.
+# Version 2 is the current standard.
+version: "2"
+
+run:
+  go: "1.25"
+  timeout: 5m
+  tests: false
+
+linters:
+  default: all
+  disable:
+    - depguard
+    - err113
+    - exhaustruct
+    - godox
+    - mnd
+    - nilnil
+    - nlreturn
+    - varnamelen
+    - promlinter
+    - wrapcheck
+    - wsl
+    - wsl_v5
+    - forbidigo
+  exclusions:
+    generated: lax
+    paths:
+      - .coverage
+      - docs
+  settings:
+    dupl:
+      threshold: 200
+    errcheck:
+      check-blank: true
+    govet:
+      enable-all: true
+    gocyclo:
+      min-complexity: 20
+    cyclop:
+      max-complexity: 20
+    lll:
+      line-length: 160
+    funlen:
+      statements: 50
+      lines: 150
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/example/denied/pkg
+              desc: just because
+
+output:
+  formats:
+    tab:
+      path: stdout
+      print-linter-name: true
+      colors: true

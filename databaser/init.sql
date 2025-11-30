@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS users
+(
+    id       INTEGER NOT NULL PRIMARY KEY,
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS events
+(
+    timestamp DATETIME NOT NULL PRIMARY KEY,
+    load      INTEGER  NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_events_load ON events (load);

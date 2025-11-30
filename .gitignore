@@ -39,6 +39,8 @@ go.work.sum
 *.db-journal
 *.db-wal
 *.db-shm
+*.sqlite
 
 # Config file (may contain secrets)
 config.toml
+

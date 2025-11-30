@@ -4,13 +4,11 @@ A Telegram bot application with SQLite database support.
 
 ## Features
 
-- Echo bot functionality - responds to messages by echoing them back
-- SQLite database integration for message storage
-- TOML configuration file support
+- ...
 
 ## Requirements
 
-- Go 1.24 or later
+- Go 1.25 or later
 - Telegram Bot API token (obtain from [@BotFather](https://t.me/botfather))
 
 ## Installation
