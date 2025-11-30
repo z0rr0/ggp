@@ -28,7 +28,6 @@ type Fetcher struct {
 	Token        string
 	Timeout      time.Duration
 	QueryTimeout time.Duration
-	TimeLocation *time.Location
 	Client       *http.Client
 }
 
@@ -73,7 +72,7 @@ func (f *Fetcher) Fetch(ctx context.Context) error {
 		return fmt.Errorf("get load: %v", err)
 	}
 
-	event := databaser.Event{Load: load, Timestamp: time.Now().In(f.TimeLocation).Truncate(time.Second)}
+	event := databaser.Event{Load: load, Timestamp: time.Now().UTC().Truncate(time.Second)}
 	if err = f.Db.SaveEvent(ctx, event); err != nil {
 		return fmt.Errorf("save event: %v", err)
 	}

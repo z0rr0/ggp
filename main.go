@@ -111,7 +111,6 @@ func main() {
 		Token:        cfg.Fetcher.AuthToken(),
 		Timeout:      cfg.Fetcher.Timeout,
 		QueryTimeout: cfg.Database.Timeout,
-		TimeLocation: cfg.Base.TimeLocation,
 		Client:       &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}},
 	}
 

@@ -70,6 +70,7 @@ func (r *importReader) Read() iter.Seq[*databaser.Event] {
 				r.err = fmt.Errorf("parse record %v: %w", record, err)
 				return
 			}
+			event.Timestamp = event.Timestamp.In(time.UTC) // save in UTC
 
 			if !yield(event) {
 				return
