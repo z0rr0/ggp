@@ -1,7 +1,7 @@
 services:
-  smerge:
+  ggp:
     image: z0rr0/ggp:latest
-    container_name: smerge
+    container_name: ggp
     user: "1000:1000"
     volumes:
       - ./data:/data

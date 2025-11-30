@@ -22,4 +22,4 @@ RUN chmod 0755 /bin/ggp
 
 VOLUME ["/data/"]
 ENTRYPOINT ["/bin/ggp"]
-CMD ["-config", "/data/config.json"]
+CMD ["-config", "/data/config.toml"]
