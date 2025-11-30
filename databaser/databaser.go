@@ -122,11 +122,15 @@ func (db *DB) GetEvents(ctx context.Context, period time.Duration, location *tim
 
 	n := len(events)
 	if n > 0 {
-		slog.DebugContext(ctx, "GetEvents", "first", events[0], "last", events[n-1], "count", n)
+		slog.DebugContext(ctx, "GetEvents-1", "first", events[0], "last", events[n-1], "count", n)
 	}
 
-	for _, event := range events {
-		event.Timestamp = event.Timestamp.In(location)
+	for i := range events {
+		events[i].Timestamp = events[i].Timestamp.In(location)
+	}
+
+	if n > 0 {
+		slog.DebugContext(ctx, "GetEvents-2", "first", events[0], "last", events[n-1], "count", n)
 	}
 
 	return events, nil
