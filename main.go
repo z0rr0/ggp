@@ -188,13 +188,27 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 		}
 
 		slog.DebugContext(ctx, "telegramHandler", "imageSize", len(imageData))
+		n := len(events)
+		caption := "load graph"
+
+		switch {
+		case n > 1:
+			caption = fmt.Sprintf(
+				"%s - %s",
+				events[0].Timestamp.In(location).Format(time.DateTime),
+				events[n-1].Timestamp.In(location).Format(time.DateTime),
+			)
+		case n == 1:
+			caption = fmt.Sprintf("%s", events[0].Timestamp.In(location).Format(time.DateTime))
+		}
+
 		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
 			ChatID: chatID,
 			Photo: &models.InputFileUpload{
 				Filename: "load.png",
 				Data:     bytes.NewReader(imageData),
 			},
-			Caption: "График загрузки за последние 24 часа",
+			Caption: caption,
 		})
 		if err != nil {
 			log.Printf("failed to send message: %v", err)
@@ -209,6 +223,7 @@ func initLogger(debug bool, w io.Writer) {
 		addSource = false
 	)
 	if debug {
+		addSource = true
 		level = slog.LevelDebug
 	}
 

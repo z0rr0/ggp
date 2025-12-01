@@ -24,11 +24,11 @@ const (
 
 const (
 	// periods defines time durations for different ranges
-	periodSecond = time.Minute * 5
-	periodMinute = time.Hour * 2
-	periodHour   = time.Hour * 36
-	periodDay    = time.Hour * 24 * 10
-	periodWeek   = time.Hour * 24 * 30 * 2
+	periodSecond = time.Minute * 60
+	periodMinute = time.Hour * 24
+	periodHour   = time.Hour * 72
+	periodDay    = time.Hour * 24 * 14
+	periodWeek   = time.Hour * 24 * 30 * 3
 	periodMonth  = time.Hour * 24 * 365 * 2
 )
 
