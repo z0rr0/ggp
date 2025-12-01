@@ -155,8 +155,13 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 		text := msg.Text
 		slog.DebugContext(ctx, "telegramHandler", "chatID", chatID, "text", text, "userID", userID)
 
-		const period = 24 * time.Hour
-		events, err := db.GetEvents(ctx, period, location)
+		duration, err := time.ParseDuration(text)
+		if err != nil {
+			slog.DebugContext(ctx, "duration parse", "chatID", chatID, "text", text, "error", err)
+			duration = 24 * time.Hour
+		}
+
+		events, err := db.GetEvents(ctx, duration)
 		if err != nil {
 			slog.Error("failed to get events", "error", err)
 			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
@@ -169,7 +174,7 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 			return
 		}
 
-		imageData, err := plotter.Graph(events)
+		imageData, err := plotter.Graph(events, location)
 		if err != nil {
 			slog.Error("failed to plot graph", "error", err)
 			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
@@ -205,7 +210,6 @@ func initLogger(debug bool, w io.Writer) {
 	)
 	if debug {
 		level = slog.LevelDebug
-		addSource = true
 	}
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{AddSource: addSource, Level: level})))

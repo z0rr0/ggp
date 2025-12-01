@@ -108,7 +108,7 @@ func (db *DB) SaveManyEvents(ctx context.Context, events []Event) error {
 }
 
 // GetEvents retrieves events to the current time minus the given period.
-func (db *DB) GetEvents(ctx context.Context, period time.Duration, location *time.Location) ([]Event, error) {
+func (db *DB) GetEvents(ctx context.Context, period time.Duration) ([]Event, error) {
 	const query = `SELECT timestamp, load FROM events WHERE timestamp >= ? ORDER BY timestamp;`
 	var (
 		ts     = time.Now().UTC().Add(-period)
@@ -118,19 +118,6 @@ func (db *DB) GetEvents(ctx context.Context, period time.Duration, location *tim
 	slog.DebugContext(ctx, "GetEvents", "query", query, "since", ts)
 	if err := db.SelectContext(ctx, &events, query, ts); err != nil {
 		return nil, fmt.Errorf("failed select events: %w", err)
-	}
-
-	n := len(events)
-	if n > 0 {
-		slog.DebugContext(ctx, "GetEvents-1", "first", events[0], "last", events[n-1], "count", n)
-	}
-
-	for i := range events {
-		events[i].Timestamp = events[i].Timestamp.In(location)
-	}
-
-	if n > 0 {
-		slog.DebugContext(ctx, "GetEvents-2", "first", events[0], "last", events[n-1], "count", n)
 	}
 
 	return events, nil

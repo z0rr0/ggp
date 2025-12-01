@@ -11,10 +11,68 @@ import (
 	"github.com/z0rr0/ggp/databaser"
 )
 
-const dateFormat = "Mon 02.01 15:04"
+const (
+	// Time format constants
+	dtFormatSecond = iota + 1
+	dtFormatMinute
+	dtFormatHour
+	dtFormatDay
+	dtFormatWeek
+	dtFormatMonth
+	dtFormatYear
+)
+
+const (
+	// periods defines time durations for different ranges
+	periodSecond = time.Minute * 5
+	periodMinute = time.Hour * 2
+	periodHour   = time.Hour * 36
+	periodDay    = time.Hour * 24 * 10
+	periodWeek   = time.Hour * 24 * 30 * 2
+	periodMonth  = time.Hour * 24 * 365 * 2
+)
+
+var (
+	// dtFormatMap maps time format constants to their corresponding layout strings.
+	// Full format "2006-01-02T15:04:05Z07:00"
+	dtFormatMap = map[int]string{
+		dtFormatSecond: "04:05",
+		dtFormatMinute: "15:04",
+		dtFormatHour:   "Mon 02.01 15",
+		dtFormatDay:    "Mon 02.01",
+		dtFormatWeek:   "Mon 02",
+		dtFormatMonth:  "01.2006",
+		dtFormatYear:   "2006",
+	}
+)
+
+func getDateFormat(events []time.Time) string {
+	n := len(events)
+	if n < 2 {
+		return dtFormatMap[dtFormatDay]
+	}
+
+	slog.Debug("determining date format", "first", events[0], "last", events[n-1])
+	switch diff := events[n-1].Sub(events[0]); {
+	case diff <= periodSecond:
+		return dtFormatMap[dtFormatSecond]
+	case diff <= periodMinute:
+		return dtFormatMap[dtFormatMinute]
+	case diff <= periodHour:
+		return dtFormatMap[dtFormatHour]
+	case diff <= periodDay:
+		return dtFormatMap[dtFormatDay]
+	case diff <= periodWeek:
+		return dtFormatMap[dtFormatWeek]
+	case diff <= periodMonth:
+		return dtFormatMap[dtFormatMonth]
+	default:
+		return dtFormatMap[dtFormatYear]
+	}
+}
 
 // Graph generates a graph from the provided events and returns a new image like byte slice.
-func Graph(events []databaser.Event) ([]byte, error) {
+func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 	var (
 		n   = len(events)
 		buf = new(bytes.Buffer)
@@ -37,15 +95,24 @@ func Graph(events []databaser.Event) ([]byte, error) {
 		},
 	}
 
-	slog.Debug("created time series", "points", n)
+	layout := getDateFormat(xs)
+	slog.Debug("created time series", "points", n, "dateFormat", layout)
 
 	graph := chart.Chart{
-		Title: "Golden Gym",
-		//Width:  int(float64(width) * scale),
-		//Height: int(float64(height) * scale),
 		XAxis: chart.XAxis{
-			Name:           "Time",
-			ValueFormatter: chart.TimeValueFormatterWithFormat(dateFormat),
+			Name: "Time",
+			ValueFormatter: func(v interface{}) string {
+				if vt, ok := v.(time.Time); ok {
+					return vt.In(location).Format(layout)
+				}
+				if vt, ok := v.(int64); ok {
+					return time.Unix(0, vt).In(location).Format(layout)
+				}
+				if vt, ok := v.(float64); ok {
+					return time.Unix(0, int64(vt)).In(location).Format(layout)
+				}
+				return ""
+			},
 			GridMajorStyle: chart.Style{
 				StrokeColor: chart.ColorAlternateGray,
 				StrokeWidth: 1.0,

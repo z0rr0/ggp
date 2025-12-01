@@ -35,11 +35,8 @@ go.work.sum
 /ggp
 
 # SQLite database files
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
 *.sqlite
+ggp.sqlite*
 
 # Config file (may contain secrets)
 config.toml
