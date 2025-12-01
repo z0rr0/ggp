@@ -36,6 +36,7 @@ type Database struct {
 
 // Fetcher contains fetcher configuration.
 type Fetcher struct {
+	Active  bool          `toml:"active"`
 	Period  int           `toml:"period"`
 	Token   string        `toml:"token"`
 	URL     string        `toml:"url"`
@@ -53,7 +54,8 @@ func (f *Fetcher) AuthToken() string {
 
 // Telegram contains Telegram bot configuration.
 type Telegram struct {
-	Token string `toml:"token"`
+	Active bool   `toml:"active"`
+	Token  string `toml:"token"`
 }
 
 // Load reads and parses a TOML configuration file.

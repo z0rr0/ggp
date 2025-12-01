@@ -104,37 +104,40 @@ func main() {
 		return
 	}
 
-	// fetcher
-	fetchWorker := &fetcher.Fetcher{
-		Db:           db,
-		URL:          cfg.Fetcher.URL,
-		Token:        cfg.Fetcher.AuthToken(),
-		Timeout:      cfg.Fetcher.Timeout,
-		QueryTimeout: cfg.Database.Timeout,
-		Client:       &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}},
-	}
-
-	fetchDoneCh, err := fetchWorker.Run(ctx)
+	fetchDoneCh, err := runFetcher(ctx, cfg, db)
 	if err != nil {
 		slog.Error("failed to start fetcher", "error", err)
 		return
 	}
 
-	// bot options
-	opts := []bot.Option{bot.WithDefaultHandler(telegramHandler(ctx, db, cfg.Base.TimeLocation, cfg.Base.AdminIDs))}
-	b, err := bot.New(cfg.Telegram.Token, opts...)
+	err = runTelegramBot(ctx, cfg, db)
 	if err != nil {
-		log.Fatalf("failed to create bot: %v", err)
+		slog.Error("telegram bot failed", "error", err)
+		return
 	}
-
-	slog.Info("bot started")
-	b.Start(ctx)
 
 	// wait for termination
 	slog.Info("shutting down bot")
 	<-ctx.Done()
 	<-fetchDoneCh
-	slog.Info("bot stopped")
+	slog.Info("stopped")
+}
+
+func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB) error {
+	if !cfg.Telegram.Active {
+		slog.Info("telegram bot is inactive")
+		return nil
+	}
+
+	opts := []bot.Option{bot.WithDefaultHandler(telegramHandler(ctx, db, cfg.Base.TimeLocation, cfg.Base.AdminIDs))}
+	b, err := bot.New(cfg.Telegram.Token, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create bot: %v", err)
+	}
+
+	slog.Info("bot started")
+	b.Start(ctx)
+	return nil
 }
 
 // telegramHandler returns a handler that echoes messages and saves them to the database.
@@ -173,6 +176,17 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 			}
 			return
 		}
+		n := len(events)
+		if n < 2 {
+			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: chatID,
+				Text:   "Too few data points in the period to plot a graph",
+			})
+			if err != nil {
+				slog.Error("failed to send message", "error", err)
+			}
+			return
+		}
 
 		imageData, err := plotter.Graph(events, location)
 		if err != nil {
@@ -188,19 +202,11 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 		}
 
 		slog.DebugContext(ctx, "telegramHandler", "imageSize", len(imageData))
-		n := len(events)
-		caption := "load graph"
-
-		switch {
-		case n > 1:
-			caption = fmt.Sprintf(
-				"%s - %s",
-				events[0].Timestamp.In(location).Format(time.DateTime),
-				events[n-1].Timestamp.In(location).Format(time.DateTime),
-			)
-		case n == 1:
-			caption = fmt.Sprintf("%s", events[0].Timestamp.In(location).Format(time.DateTime))
-		}
+		caption := fmt.Sprintf(
+			"%s - %s",
+			events[0].Timestamp.In(location).Format(time.DateTime),
+			events[n-1].Timestamp.In(location).Format(time.DateTime),
+		)
 
 		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
 			ChatID: chatID,
@@ -228,4 +234,24 @@ func initLogger(debug bool, w io.Writer) {
 	}
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{AddSource: addSource, Level: level})))
+}
+
+func runFetcher(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-chan struct{}, error) {
+	if !cfg.Fetcher.Active {
+		slog.Info("fetcher is inactive")
+		doneCh := make(chan struct{})
+		close(doneCh)
+		return doneCh, nil
+	}
+
+	fetchWorker := &fetcher.Fetcher{
+		Db:           db,
+		URL:          cfg.Fetcher.URL,
+		Token:        cfg.Fetcher.AuthToken(),
+		Timeout:      cfg.Fetcher.Timeout,
+		QueryTimeout: cfg.Database.Timeout,
+		Client:       &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}},
+	}
+
+	return fetchWorker.Run(ctx)
 }

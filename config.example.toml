@@ -8,9 +8,11 @@ path = "ggp.sqlite"
 query_timeout = 5  # in seconds
 
 [fetcher]
+active = true
 period = 300  # in seconds
 token = "auth_token"
 url = ""  # http(s) url to data source
 
 [telegram]
+active = true
 token = "bot_token"
