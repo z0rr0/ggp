@@ -3,6 +3,7 @@ package plotter
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -24,7 +25,7 @@ const (
 
 const (
 	// periods defines time durations for different ranges
-	periodSecond = time.Minute * 60
+	periodSecond = time.Minute * 15
 	periodMinute = time.Hour * 24
 	periodHour   = time.Hour * 72
 	periodDay    = time.Hour * 24 * 14
@@ -36,9 +37,9 @@ var (
 	// dtFormatMap maps time format constants to their corresponding layout strings.
 	// Full format "2006-01-02T15:04:05Z07:00"
 	dtFormatMap = map[int]string{
-		dtFormatSecond: "04:05",
+		dtFormatSecond: "04:05s",
 		dtFormatMinute: "15:04",
-		dtFormatHour:   "Mon 02.01 15",
+		dtFormatHour:   "Mon 15",
 		dtFormatDay:    "Mon 02.01",
 		dtFormatWeek:   "Mon 02",
 		dtFormatMonth:  "01.2006",
@@ -80,9 +81,15 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 		ys  = make([]float64, 0, n)
 	)
 
+	if n < 1 {
+		return nil, errors.New("graph called with no events")
+	}
+
+	maxY := 0.0
 	for _, event := range events {
 		xs = append(xs, event.Timestamp)
 		ys = append(ys, float64(event.Load))
+		maxY = max(maxY, float64(event.Load))
 	}
 
 	series := chart.TimeSeries{
@@ -91,7 +98,7 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 		YValues: ys,
 		Style: chart.Style{
 			StrokeColor: chart.ColorBlue,
-			StrokeWidth: 2.0,
+			StrokeWidth: 4.0,
 		},
 	}
 
@@ -117,11 +124,23 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 				StrokeColor: chart.ColorAlternateGray,
 				StrokeWidth: 1.0,
 			},
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorLightGray,
+				StrokeWidth: 1.0,
+			},
 		},
 		YAxis: chart.YAxis{
 			Name: "Load (%)",
+			Range: &chart.ContinuousRange{
+				Min: 0.0,
+				Max: maxY + 10.0,
+			},
 			GridMajorStyle: chart.Style{
 				StrokeColor: chart.ColorAlternateGray,
+				StrokeWidth: 1.0,
+			},
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorLightGray,
 				StrokeWidth: 1.0,
 			},
 		},
