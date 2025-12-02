@@ -2,6 +2,8 @@ module github.com/z0rr0/ggp
 
 go 1.25
 
+toolchain go1.25.4
+
 require (
 	github.com/go-telegram/bot v1.17.0
 	github.com/jmoiron/sqlx v1.4.0
