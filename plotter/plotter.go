@@ -25,7 +25,7 @@ const (
 
 const (
 	// periods defines time durations for different ranges
-	periodSecond = time.Minute * 15
+	periodSecond = time.Minute * 2
 	periodMinute = time.Hour * 24
 	periodHour   = time.Hour * 72
 	periodDay    = time.Hour * 24 * 14
@@ -37,11 +37,11 @@ var (
 	// dtFormatMap maps time format constants to their corresponding layout strings.
 	// Full format "2006-01-02T15:04:05Z07:00"
 	dtFormatMap = map[int]string{
-		dtFormatSecond: "04:05s",
+		dtFormatSecond: "5s",
 		dtFormatMinute: "15:04",
-		dtFormatHour:   "Mon 15",
-		dtFormatDay:    "Mon 02.01",
-		dtFormatWeek:   "Mon 02",
+		dtFormatHour:   "Mon 15:00",
+		dtFormatDay:    "Mon _2 Jan",
+		dtFormatWeek:   "Monday _2",
 		dtFormatMonth:  "01.2006",
 		dtFormatYear:   "2006",
 	}
@@ -73,12 +73,16 @@ func getDateFormat(events []time.Time) string {
 }
 
 // Graph generates a graph from the provided events and returns a new image like byte slice.
-func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
+func Graph(events, prediction []databaser.Event, location *time.Location) ([]byte, error) {
 	var (
 		n   = len(events)
+		np  = len(prediction)
 		buf = new(bytes.Buffer)
 		xs  = make([]time.Time, 0, n)
 		ys  = make([]float64, 0, n)
+		// prediction
+		pxs = make([]time.Time, 0, np)
+		pys = make([]float64, 0, np)
 	)
 
 	if n < 1 {
@@ -90,9 +94,12 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 		xs = append(xs, event.Timestamp)
 		ys = append(ys, float64(event.Load))
 		maxY = max(maxY, float64(event.Load))
+
+		pxs = append(pxs, event.Timestamp.Add(5*time.Minute))
+		pys = append(pys, float64(event.Load)+5.0)
 	}
 
-	series := chart.TimeSeries{
+	mainSeries := chart.TimeSeries{
 		Name:    "Load",
 		XValues: xs,
 		YValues: ys,
@@ -100,6 +107,28 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 			StrokeColor: chart.ColorBlue,
 			StrokeWidth: 4.0,
 		},
+	}
+	series := []chart.Series{mainSeries}
+
+	if np > 1 {
+		for _, event := range prediction {
+			maxY = max(maxY, float64(event.Load))
+
+			pxs = append(pxs, event.Timestamp.Add(5*time.Minute))
+			pys = append(pys, float64(event.Load)+5.0)
+		}
+
+		predictionSeries := chart.TimeSeries{
+			Name:    "Trend",
+			XValues: pxs,
+			YValues: pys,
+			Style: chart.Style{
+				StrokeColor:     chart.ColorRed,
+				StrokeWidth:     3.0,
+				StrokeDashArray: []float64{5.0, 5.0},
+			},
+		}
+		series = append(series, predictionSeries)
 	}
 
 	layout := getDateFormat(xs)
@@ -144,7 +173,7 @@ func Graph(events []databaser.Event, location *time.Location) ([]byte, error) {
 				StrokeWidth: 1.0,
 			},
 		},
-		Series: []chart.Series{series},
+		Series: series,
 	}
 
 	err := graph.Render(chart.PNG, buf)

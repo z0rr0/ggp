@@ -188,7 +188,7 @@ func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Locat
 			return
 		}
 
-		imageData, err := plotter.Graph(events, location)
+		imageData, err := plotter.Graph(events, nil, location)
 		if err != nil {
 			slog.Error("failed to plot graph", "error", err)
 			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
