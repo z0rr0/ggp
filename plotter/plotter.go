@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/wcharczuk/go-chart/v2"
@@ -45,6 +46,12 @@ var (
 		dtFormatMonth:  "01.2006",
 		dtFormatYear:   "2006",
 	}
+
+	bufferPool = sync.Pool{
+		New: func() any {
+			return new(bytes.Buffer)
+		},
+	}
 )
 
 func getDateFormat(events []time.Time) string {
@@ -77,7 +84,6 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 	var (
 		n   = len(events)
 		np  = len(prediction)
-		buf = new(bytes.Buffer)
 		xs  = make([]time.Time, 0, n)
 		ys  = make([]float64, 0, n)
 		// prediction
@@ -175,6 +181,10 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 		},
 		Series: series,
 	}
+
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
 
 	err := graph.Render(chart.PNG, buf)
 	if err != nil {

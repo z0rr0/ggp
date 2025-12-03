@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -15,17 +14,15 @@ import (
 	"runtime"
 	"runtime/debug"
 	"syscall"
-	"time"
 	_ "time/tzdata"
 
 	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 
 	"github.com/z0rr0/ggp/config"
 	"github.com/z0rr0/ggp/databaser"
 	"github.com/z0rr0/ggp/fetcher"
 	"github.com/z0rr0/ggp/importer"
-	"github.com/z0rr0/ggp/plotter"
+	"github.com/z0rr0/ggp/watcher"
 )
 
 var (
@@ -128,112 +125,113 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB) e
 		slog.Info("telegram bot is inactive")
 		return nil
 	}
+	//opts := []bot.Option{bot.WithDefaultHandler(telegramHandler(ctx, db, cfg.Base.TimeLocation, cfg.Base.AdminIDs))}
 
-	opts := []bot.Option{bot.WithDefaultHandler(telegramHandler(ctx, db, cfg.Base.TimeLocation, cfg.Base.AdminIDs))}
-	b, err := bot.New(cfg.Telegram.Token, opts...)
+	b, err := bot.New(cfg.Telegram.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create bot: %v", err)
 	}
 
-	slog.Info("bot started")
+	botHandler := watcher.NewBotHandler(db, cfg)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.StartCommand, bot.MatchTypeExact, botHandler.HandleStart)
+	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, watcher.CallbackPrefix, bot.MatchTypePrefix, botHandler.HandleCallback)
+
+	slog.Info("bot is starting")
 	b.Start(ctx)
 	return nil
 }
-
-// telegramHandler returns a handler that echoes messages and saves them to the database.
-func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Location, admins map[int64]struct{}) bot.HandlerFunc {
-	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
-		if update.Message == nil {
-			return
-		}
-
-		msg := update.Message
-		if _, ok := admins[msg.From.ID]; !ok {
-			slog.WarnContext(ctx, "unauthorized user", "userID", msg.From.ID)
-			return
-		}
-
-		chatID := msg.Chat.ID
-		userID := msg.From.ID
-		text := msg.Text
-		slog.DebugContext(ctx, "telegramHandler", "chatID", chatID, "text", text, "userID", userID)
-
-		duration, err := time.ParseDuration(text)
-		if err != nil {
-			slog.DebugContext(ctx, "duration parse", "chatID", chatID, "text", text, "error", err)
-			duration = 24 * time.Hour
-		}
-
-		events, err := db.GetEvents(ctx, duration)
-		if err != nil {
-			slog.Error("failed to get events", "error", err)
-			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatID,
-				Text:   "failed to get events",
-			})
-			if err != nil {
-				slog.Error("failed to send message", "error", err)
-			}
-			return
-		}
-		n := len(events)
-		if n < 2 {
-			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatID,
-				Text:   "Too few data points in the period to plot a graph",
-			})
-			if err != nil {
-				slog.Error("failed to send message", "error", err)
-			}
-			return
-		}
-
-		imageData, err := plotter.Graph(events, nil, location)
-		if err != nil {
-			slog.Error("failed to plot graph", "error", err)
-			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: chatID,
-				Text:   "failed to plot graph",
-			})
-			if err != nil {
-				slog.Error("failed to send message", "error", err)
-			}
-			return
-		}
-
-		slog.DebugContext(ctx, "telegramHandler", "imageSize", len(imageData))
-		caption := fmt.Sprintf(
-			"%s - %s",
-			events[0].Timestamp.In(location).Format(time.DateTime),
-			events[n-1].Timestamp.In(location).Format(time.DateTime),
-		)
-
-		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
-			ChatID: chatID,
-			Photo: &models.InputFileUpload{
-				Filename: "load.png",
-				Data:     bytes.NewReader(imageData),
-			},
-			Caption: caption,
-		})
-		if err != nil {
-			log.Printf("failed to send message: %v", err)
-		}
-	}
-}
+//
+//// telegramHandler returns a handler that echoes messages and saves them to the database.
+//func telegramHandler(ctx context.Context, db *databaser.DB, location *time.Location, admins map[int64]struct{}) bot.HandlerFunc {
+//	return func(ctx context.Context, b *bot.Bot, update *models.Update) {
+//		if update.Message == nil {
+//			return
+//		}
+//
+//		msg := update.Message
+//		if _, ok := admins[msg.From.ID]; !ok {
+//			slog.WarnContext(ctx, "unauthorized user", "userID", msg.From.ID)
+//			return
+//		}
+//
+//		chatID := msg.Chat.ID
+//		userID := msg.From.ID
+//		text := msg.Text
+//		slog.DebugContext(ctx, "telegramHandler", "chatID", chatID, "text", text, "userID", userID)
+//
+//		duration, err := time.ParseDuration(text)
+//		if err != nil {
+//			slog.DebugContext(ctx, "duration parse", "chatID", chatID, "text", text, "error", err)
+//			duration = 24 * time.Hour
+//		}
+//
+//		events, err := db.GetEvents(ctx, duration)
+//		if err != nil {
+//			slog.Error("failed to get events", "error", err)
+//			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+//				ChatID: chatID,
+//				Text:   "failed to get events",
+//			})
+//			if err != nil {
+//				slog.Error("failed to send message", "error", err)
+//			}
+//			return
+//		}
+//		n := len(events)
+//		if n < 2 {
+//			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+//				ChatID: chatID,
+//				Text:   "Too few data points in the period to plot a graph",
+//			})
+//			if err != nil {
+//				slog.Error("failed to send message", "error", err)
+//			}
+//			return
+//		}
+//
+//		imageData, err := plotter.Graph(events, nil, location)
+//		if err != nil {
+//			slog.Error("failed to plot graph", "error", err)
+//			_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+//				ChatID: chatID,
+//				Text:   "failed to plot graph",
+//			})
+//			if err != nil {
+//				slog.Error("failed to send message", "error", err)
+//			}
+//			return
+//		}
+//
+//		slog.DebugContext(ctx, "telegramHandler", "imageSize", len(imageData))
+//		caption := fmt.Sprintf(
+//			"%s - %s",
+//			events[0].Timestamp.In(location).Format(time.DateTime),
+//			events[n-1].Timestamp.In(location).Format(time.DateTime),
+//		)
+//
+//		_, err = b.SendPhoto(ctx, &bot.SendPhotoParams{
+//			ChatID: chatID,
+//			Photo: &models.InputFileUpload{
+//				Filename: "load.png",
+//				Data:     bytes.NewReader(imageData),
+//			},
+//			Caption: caption,
+//		})
+//		if err != nil {
+//			log.Printf("failed to send message: %v", err)
+//		}
+//	}
+//}
 
 // initLogger initializes logger with debug mode and writer.
 func initLogger(debug bool, w io.Writer) {
-	var (
-		level     = slog.LevelInfo
-		addSource = false
-	)
+	var level = slog.LevelInfo
+
 	if debug {
-		addSource = true
 		level = slog.LevelDebug
 	}
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{AddSource: addSource, Level: level})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
 }
 
 func runFetcher(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-chan struct{}, error) {
