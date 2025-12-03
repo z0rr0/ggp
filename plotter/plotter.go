@@ -82,10 +82,10 @@ func getDateFormat(events []time.Time) string {
 // Graph generates a graph from the provided events and returns a new image like byte slice.
 func Graph(events, prediction []databaser.Event, location *time.Location) ([]byte, error) {
 	var (
-		n   = len(events)
-		np  = len(prediction)
-		xs  = make([]time.Time, 0, n)
-		ys  = make([]float64, 0, n)
+		n  = len(events)
+		np = len(prediction)
+		xs = make([]time.Time, 0, n)
+		ys = make([]float64, 0, n)
 		// prediction
 		pxs = make([]time.Time, 0, np)
 		pys = make([]float64, 0, np)
@@ -118,10 +118,11 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 
 	if np > 1 {
 		for _, event := range prediction {
-			maxY = max(maxY, float64(event.Load))
+			load := event.FloatLoad()
+			maxY = max(maxY, load)
 
 			pxs = append(pxs, event.Timestamp.Add(5*time.Minute))
-			pys = append(pys, float64(event.Load)+5.0)
+			pys = append(pys, load+5.0)
 		}
 
 		predictionSeries := chart.TimeSeries{

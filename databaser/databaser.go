@@ -76,8 +76,13 @@ type Event struct {
 	Load      uint8     `db:"load"`
 }
 
+// FloatLoad returns the load as a float64.
+func (e *Event) FloatLoad() float64 {
+	return float64(e.Load)
+}
+
 // LogValue implements slog.LogValuer for Event.
-func (e Event) LogValue() slog.Value {
+func (e *Event) LogValue() slog.Value {
 	return slog.StringValue(fmt.Sprintf("{timestamp: '%s', load: %d}", e.Timestamp.Format(time.RFC3339), e.Load))
 }
 

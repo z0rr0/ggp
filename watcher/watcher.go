@@ -19,9 +19,11 @@ import (
 const (
 	StartCommand   = "/start"
 	CallbackPrefix = "/period"
+	MenuCommand    = "📋 Меню"
 
-	callbackDay  = CallbackPrefix + "Day"
-	callbackWeek = CallbackPrefix + "Week"
+	callbackHalfDay = CallbackPrefix + "HalfDay"
+	callbackDay     = CallbackPrefix + "Day"
+	callbackWeek    = CallbackPrefix + "Week"
 
 	dateTimeFormat = "02.01.2006 15:04"
 )
@@ -36,13 +38,41 @@ func NewBotHandler(db *databaser.DB, cfg *config.Config) *BotHandler {
 }
 
 func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
+	start := time.Now()
+	defer func() {
+		slog.InfoContext(ctx, "handle start completed", "duration", time.Since(start))
+	}()
+
+	kb := &models.ReplyKeyboardMarkup{
+		Keyboard: [][]models.KeyboardButton{
+			{{Text: MenuCommand}},
+		},
+		ResizeKeyboard: true,
+	}
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID:      update.Message.Chat.ID,
+		Text:        "Нажмите «Меню» для выбора периода",
+		ReplyMarkup: kb,
+	})
+
+	if err != nil {
+		slog.Error("HandleStart", "error", err)
+	}
+}
+
+func (h *BotHandler) HandleMenu(ctx context.Context, b *bot.Bot, update *models.Update) {
+	start := time.Now()
+	defer func() {
+		slog.InfoContext(ctx, "handle menu completed", "duration", time.Since(start))
+	}()
 	kb := &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
 				{Text: "📅 День", CallbackData: callbackDay},
+				{Text: "📆 Неделя", CallbackData: callbackWeek},
 			},
 			{
-				{Text: "📆 Неделя", CallbackData: callbackWeek},
+				{Text: "🕒 Полдня", CallbackData: callbackHalfDay},
 			},
 		},
 	}
@@ -54,7 +84,7 @@ func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models
 	})
 
 	if err != nil {
-		slog.Error("send message", "error", err)
+		slog.Error("HandleMenu", "error", err)
 	}
 }
 
@@ -81,6 +111,8 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 	var duration time.Duration
 
 	switch period {
+	case callbackHalfDay:
+		duration = 12 * time.Hour
 	case callbackDay:
 		duration = 24 * time.Hour
 	case callbackWeek:
@@ -89,6 +121,47 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 		return
 	}
 
+	h.buildGraph(ctx, b, chatID, duration)
+}
+
+func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	start := time.Now()
+	defer func() {
+		slog.InfoContext(ctx, "default handler completed", "duration", time.Since(start))
+	}()
+
+	chatID := update.Message.Chat.ID
+	userID := update.Message.From.ID
+
+	if _, ok := h.cfg.Base.AdminIDs[userID]; !ok {
+		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
+		return
+	}
+
+	text := update.Message.Text
+	duration, err := time.ParseDuration(text)
+	if err != nil {
+		sendErrorMessage(ctx, err, b, chatID, "не удалось распознать период")
+		return
+	}
+
+	h.buildGraph(ctx, b, chatID, duration)
+}
+
+func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, text string) {
+	slog.ErrorContext(ctx, "sending error message", "error", err)
+
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: chatID,
+		Text:   text,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to send message", "error", err)
+	}
+}
+
+func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, duration time.Duration) {
 	events, err := h.db.GetEvents(ctx, duration)
 	if err != nil {
 		sendErrorMessage(ctx, err, b, chatID, "Не удалось получить данные за указанный период")
@@ -126,18 +199,5 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 	if err != nil {
 		sendErrorMessage(ctx, err, b, chatID, "Не удалось отправить график")
 		return
-	}
-}
-
-func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, text string) {
-	slog.ErrorContext(ctx, "sending error message", "error", err)
-
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: chatID,
-		Text:   text,
-	})
-
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to send message", "error", err)
 	}
 }

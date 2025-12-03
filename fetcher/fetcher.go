@@ -77,7 +77,7 @@ func (f *Fetcher) Fetch(ctx context.Context) error {
 		return fmt.Errorf("save event: %v", err)
 	}
 
-	slog.Info("fetched", "event", event)
+	slog.Info("fetched", "event", &event)
 	return nil
 }
 
