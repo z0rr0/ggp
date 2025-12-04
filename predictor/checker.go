@@ -1,6 +1,5 @@
 package predictor
 
-
 import (
 	"context"
 	"fmt"
