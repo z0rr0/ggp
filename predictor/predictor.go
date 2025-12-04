@@ -280,6 +280,9 @@ func (p *Predictor) String() string {
 
 // GetTypicalLoad returns the typical load for the given time based on historical data.
 func (p *Predictor) GetTypicalLoad(t time.Time) float64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	dayType := p.getDayType(t)
 	hour := t.Hour()
 	stats := p.stats[dayType][hour]
