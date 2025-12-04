@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/z0rr0/ggp/config"
 	"github.com/z0rr0/ggp/databaser"
@@ -94,14 +95,13 @@ func (c *Controller) LoadEvents(ctx context.Context, db *databaser.DB) error {
 
 // PredictLoad generates load predictions for the configured number of hours.
 func (c *Controller) PredictLoad() []databaser.Event {
+	now := time.Now().UTC()
 	predictions := c.predictor.PredictRange(c.Hours)
-	events := make([]databaser.Event, len(predictions))
+	events := make([]databaser.Event, 0, len(predictions)+1)
 
-	for i, p := range predictions {
-		events[i] = databaser.Event{
-			Timestamp: p.TargetTime,
-			Predict:   p.Load,
-		}
+	events = append(events, databaser.Event{Timestamp: now, Predict: c.predictor.GetTypicalLoad(now)})
+	for _, p := range predictions {
+		events = append(events, databaser.Event{Timestamp: p.TargetTime, Predict: p.Load})
 	}
 
 	return events

@@ -1,8 +1,13 @@
 ARG GOLANG_VERSION="1.25.5"
 
 FROM golang:${GOLANG_VERSION}-alpine AS builder
-ARG LDFLAGS=""
 WORKDIR /go/src/github.com/z0rr0/ggp
+
+# download dependencies to cache them in a layer
+COPY go.mod go.sum ./
+RUN go mod download
+
+ARG LDFLAGS=""
 COPY . .
 RUN echo "LDFLAGS = $LDFLAGS"
 RUN GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ./ggp

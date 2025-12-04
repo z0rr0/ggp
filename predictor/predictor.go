@@ -263,7 +263,7 @@ func (p *Predictor) PredictRange(maxHours uint8) []Prediction {
 }
 
 // String implements the Stringer interface for Predictor.
-// It returns stats info.
+// It returns statistics for all day types and hours.
 func (p *Predictor) String() string {
 	var s strings.Builder
 
@@ -276,4 +276,17 @@ func (p *Predictor) String() string {
 	}
 
 	return s.String()
+}
+
+// GetTypicalLoad returns the typical load for the given time based on historical data.
+func (p *Predictor) GetTypicalLoad(t time.Time) float64 {
+	dayType := p.getDayType(t)
+	hour := t.Hour()
+	stats := p.stats[dayType][hour]
+
+	if stats.TotalWeight >= p.minWeight {
+		return stats.WeightedSum / stats.TotalWeight
+	}
+
+	return p.fallbackPrediction(int(dayType))
 }
