@@ -18,6 +18,10 @@ active = true
 period = 86400  # in seconds, 1 day
 url = ""  # XML http(s) url to data source, year is <YEAR> string
 
+[predictor]
+active = true
+hours = 4
+
 [telegram]
 active = true
 token = "bot_token"

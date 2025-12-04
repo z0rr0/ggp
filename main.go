@@ -23,6 +23,7 @@ import (
 	"github.com/z0rr0/ggp/fetcher"
 	"github.com/z0rr0/ggp/holidayer"
 	"github.com/z0rr0/ggp/importer"
+	"github.com/z0rr0/ggp/predictor"
 	"github.com/z0rr0/ggp/watcher"
 )
 
@@ -102,7 +103,7 @@ func main() {
 		return
 	}
 
-	fetchDoneCh, err := runFetcher(ctx, cfg, db)
+	fetchDoneCh, eventCh, err := runFetcher(ctx, cfg, db)
 	if err != nil {
 		slog.Error("failed to start fetcher", "error", err)
 		return
@@ -111,6 +112,12 @@ func main() {
 	holidayerDoneCh, err := runHolidayer(ctx, cfg, db)
 	if err != nil {
 		slog.Error("failed to start holidayer", "error", err)
+		return
+	}
+
+	predictorCh, err := runPredictor(ctx, cfg, db, eventCh)
+	if err != nil {
+		slog.Error("failed to start predictor", "error", err)
 		return
 	}
 
@@ -123,6 +130,7 @@ func main() {
 	// wait for termination
 	slog.Info("shutting down bot")
 	<-ctx.Done()
+	<-predictorCh
 	<-holidayerDoneCh
 	<-fetchDoneCh
 	slog.Info("stopped")
@@ -160,12 +168,12 @@ func initLogger(debug bool, w io.Writer) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})))
 }
 
-func runFetcher(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-chan struct{}, error) {
+func runFetcher(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-chan struct{}, <-chan databaser.Event, error) {
 	if !cfg.Fetcher.Active {
 		slog.Info("fetcher is inactive")
 		doneCh := make(chan struct{})
 		close(doneCh)
-		return doneCh, nil
+		return doneCh, nil, nil
 	}
 
 	fetchWorker := &fetcher.Fetcher{
@@ -198,4 +206,20 @@ func runHolidayer(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-
 	}
 
 	return holidayerWorker.Run(ctx)
+}
+
+func runPredictor(ctx context.Context, cfg *config.Config, db *databaser.DB, eventCh <-chan databaser.Event) (<-chan struct{}, error) {
+	if !cfg.Predictor.Active {
+		slog.Info("predictor is inactive")
+		doneCh := make(chan struct{})
+		close(doneCh)
+		return doneCh, nil
+	}
+
+	controller, err := predictor.Run(ctx, db, eventCh, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start predictor controller: %v", err)
+	}
+
+	return controller.Run(ctx), nil
 }

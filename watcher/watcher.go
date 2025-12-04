@@ -14,6 +14,7 @@ import (
 	"github.com/z0rr0/ggp/config"
 	"github.com/z0rr0/ggp/databaser"
 	"github.com/z0rr0/ggp/plotter"
+	"github.com/z0rr0/ggp/predictor"
 )
 
 const (
@@ -31,10 +32,11 @@ const (
 type BotHandler struct {
 	db  *databaser.DB
 	cfg *config.Config
+	pc  *predictor.Controller
 }
 
-func NewBotHandler(db *databaser.DB, cfg *config.Config) *BotHandler {
-	return &BotHandler{db: db, cfg: cfg}
+func NewBotHandler(db *databaser.DB, cfg *config.Config, pc *predictor.Controller) *BotHandler {
+	return &BotHandler{db: db, cfg: cfg, pc: pc}
 }
 
 func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -174,7 +176,12 @@ func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, d
 		return
 	}
 
-	imageData, err := plotter.Graph(events, nil, h.cfg.Base.TimeLocation)
+	var prediction []databaser.Event
+	if h.pc != nil {
+		prediction = h.pc.PredictLoad()
+	}
+
+	imageData, err := plotter.Graph(events, prediction, h.cfg.Base.TimeLocation)
 	if err != nil {
 		sendErrorMessage(ctx, err, b, chatID, "Не удалось построить график")
 		return

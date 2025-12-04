@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -138,8 +137,9 @@ func (hp *HolidayParams) Fetch(ctx context.Context) error {
 		return fmt.Errorf("get holidays for next year: %v", err)
 	}
 
+	holidays = append(holidays, holidaysNext...)
 	err = databaser.InTransaction(ctx, hp.Db, func(tx *sqlx.Tx) error {
-		return databaser.SaveManyHolidaysTx(ctx, tx, slices.Concat(holidays, holidaysNext))
+		return databaser.SaveManyHolidaysTx(ctx, tx, holidays)
 	})
 
 	if err != nil {

@@ -18,6 +18,7 @@ type Config struct {
 	Database  Database  `toml:"database"`
 	Fetcher   Fetcher   `toml:"fetcher"`
 	Holidayer Holidayer `toml:"holidayer"`
+	Predictor Predictor `toml:"predictor"`
 	Telegram  Telegram  `toml:"telegram"`
 }
 
@@ -59,6 +60,12 @@ type Holidayer struct {
 	Period  int           `toml:"period"`
 	URL     string        `toml:"url"`
 	Timeout time.Duration `toml:"-"`
+}
+
+// Predictor contains predictor configuration.
+type Predictor struct {
+	Active bool  `toml:"active"`
+	Hours  uint8 `toml:"hours"`
 }
 
 // Telegram contains Telegram bot configuration.
@@ -117,6 +124,10 @@ func (c *Config) validate() error {
 
 	if c.Holidayer.URL == "" {
 		return fmt.Errorf("holidayer URL is required")
+	}
+
+	if c.Predictor.Hours < 1 || c.Predictor.Hours > 24 {
+		return fmt.Errorf("predictor hours must be between 1 and 24")
 	}
 
 	if c.Telegram.Token == "" {

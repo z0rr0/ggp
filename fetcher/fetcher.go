@@ -29,41 +29,47 @@ type Fetcher struct {
 	Timeout      time.Duration
 	QueryTimeout time.Duration
 	Client       *http.Client
+	eventCh      chan databaser.Event
 }
 
 // Run begins the periodic fetching process.
-func (f *Fetcher) Run(ctx context.Context) (<-chan struct{}, error) {
-	err := f.Fetch(ctx)
+func (f *Fetcher) Run(ctx context.Context) (<-chan struct{}, <-chan databaser.Event, error) {
+	eventCh := make(chan databaser.Event, 1)
+	err := f.Fetch(ctx, eventCh)
 	if err != nil {
-		return nil, fmt.Errorf("initial fetch: %v", err)
+		close(eventCh)
+		return nil, nil, fmt.Errorf("initial fetch: %v", err)
 	}
 
 	doneCh := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(f.Timeout)
-		defer ticker.Stop()
+		defer func() {
+			ticker.Stop()
+			close(eventCh)
+			close(doneCh)
+		}()
 		slog.Info("fetcher starting", "period", f.Timeout)
 
 		for {
 			select {
 			case <-ctx.Done():
 				slog.Info("stopping fetcher")
-				close(doneCh)
 				return
 			case <-ticker.C:
 				slog.Info("wake up fetcher")
-				if fetchErr := f.Fetch(ctx); fetchErr != nil {
+				if fetchErr := f.Fetch(ctx, eventCh); fetchErr != nil {
 					slog.Error("fetch error", "error", fetchErr)
 				}
 			}
 		}
 	}()
 
-	return doneCh, nil
+	return doneCh, eventCh, nil
 }
 
 // Fetch retrieves the current load and saves it to the database.
-func (f *Fetcher) Fetch(ctx context.Context) error {
+func (f *Fetcher) Fetch(ctx context.Context, eventCh chan<- databaser.Event) error {
 	ctx, cancel := context.WithTimeout(ctx, f.QueryTimeout)
 	defer cancel()
 
@@ -77,6 +83,7 @@ func (f *Fetcher) Fetch(ctx context.Context) error {
 		return fmt.Errorf("save event: %v", err)
 	}
 
+	eventCh <- event
 	slog.Info("fetched", "event", &event)
 	return nil
 }

@@ -97,12 +97,17 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 
 	maxY := 0.0
 	for _, event := range events {
+		load := event.FloatLoad()
 		xs = append(xs, event.Timestamp)
-		ys = append(ys, float64(event.Load))
-		maxY = max(maxY, float64(event.Load))
+		ys = append(ys, load)
+		maxY = max(maxY, load)
+	}
 
-		pxs = append(pxs, event.Timestamp.Add(5*time.Minute))
-		pys = append(pys, float64(event.Load)+5.0)
+	for _, event := range prediction {
+		load := event.Predict
+		pxs = append(pxs, event.Timestamp)
+		pys = append(pys, load)
+		maxY = max(maxY, load)
 	}
 
 	mainSeries := chart.TimeSeries{
@@ -126,7 +131,7 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 		}
 
 		predictionSeries := chart.TimeSeries{
-			Name:    "Trend",
+			Name:    "Prediction",
 			XValues: pxs,
 			YValues: pys,
 			Style: chart.Style{

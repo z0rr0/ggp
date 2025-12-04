@@ -14,6 +14,7 @@ import (
 type Event struct {
 	Timestamp time.Time `db:"timestamp"`
 	Load      uint8     `db:"load"`
+	Predict   float64   `db:"-"`
 }
 
 // FloatLoad returns the load as a float64.
@@ -63,6 +64,19 @@ func (db *DB) GetEvents(ctx context.Context, period time.Duration) ([]Event, err
 	slog.DebugContext(ctx, "GetEvents", "query", query, "since", ts)
 	if err := db.SelectContext(ctx, &events, query, ts); err != nil {
 		return nil, fmt.Errorf("failed select events: %w", err)
+	}
+
+	return events, nil
+}
+
+// GetAllEvents retrieves all events with pagination.
+func (db *DB) GetAllEvents(ctx context.Context, limit, offset int) ([]Event, error) {
+	const query = `SELECT timestamp, load FROM events ORDER BY timestamp LIMIT ? OFFSET ?;`
+	var events []Event
+
+	slog.DebugContext(ctx, "GetAllEvents", "query", query, "limit", limit, "offset", offset)
+	if err := db.SelectContext(ctx, &events, query, limit, offset); err != nil {
+		return nil, fmt.Errorf("failed select all events: %w", err)
 	}
 
 	return events, nil
