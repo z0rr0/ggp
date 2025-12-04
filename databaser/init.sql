@@ -10,3 +10,9 @@ CREATE TABLE IF NOT EXISTS events
     load      INTEGER  NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_events_load ON events (load);
+
+CREATE TABLE IF NOT EXISTS holidays
+(
+    day   DATE         NOT NULL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL
+);

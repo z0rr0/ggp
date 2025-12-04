@@ -37,6 +37,7 @@ go.work.sum
 # SQLite database files
 *.sqlite
 ggp.sqlite*
+calendar.xml
 
 # Config file (may contain secrets)
 config.toml

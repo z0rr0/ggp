@@ -33,7 +33,7 @@ type Fetcher struct {
 
 // Run begins the periodic fetching process.
 func (f *Fetcher) Run(ctx context.Context) (<-chan struct{}, error) {
-	err := f.Fetch(context.Background())
+	err := f.Fetch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("initial fetch: %v", err)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/z0rr0/ggp/config"
 	"github.com/z0rr0/ggp/databaser"
 	"github.com/z0rr0/ggp/fetcher"
+	"github.com/z0rr0/ggp/holidayer"
 	"github.com/z0rr0/ggp/importer"
 	"github.com/z0rr0/ggp/watcher"
 )
@@ -107,6 +108,12 @@ func main() {
 		return
 	}
 
+	holidayerDoneCh, err := runHolidayer(ctx, cfg, db)
+	if err != nil {
+		slog.Error("failed to start holidayer", "error", err)
+		return
+	}
+
 	err = runTelegramBot(ctx, cfg, db)
 	if err != nil {
 		slog.Error("telegram bot failed", "error", err)
@@ -116,6 +123,7 @@ func main() {
 	// wait for termination
 	slog.Info("shutting down bot")
 	<-ctx.Done()
+	<-holidayerDoneCh
 	<-fetchDoneCh
 	slog.Info("stopped")
 }
@@ -170,4 +178,24 @@ func runFetcher(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-ch
 	}
 
 	return fetchWorker.Run(ctx)
+}
+
+func runHolidayer(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-chan struct{}, error) {
+	if !cfg.Holidayer.Active {
+		slog.Info("holidayer is inactive")
+		doneCh := make(chan struct{})
+		close(doneCh)
+		return doneCh, nil
+	}
+
+	holidayerWorker := &holidayer.HolidayParams{
+		Db:           db,
+		Location:     cfg.Base.TimeLocation,
+		URL:          cfg.Holidayer.URL,
+		Timeout:      cfg.Holidayer.Timeout,
+		QueryTimeout: cfg.Database.Timeout,
+		Client:       &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}},
+	}
+
+	return holidayerWorker.Run(ctx)
 }

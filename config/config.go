@@ -14,10 +14,11 @@ const tokenPrefix = "Bearer "
 
 // Config represents the application configuration.
 type Config struct {
-	Base     Base     `toml:"base"`
-	Database Database `toml:"database"`
-	Fetcher  Fetcher  `toml:"fetcher"`
-	Telegram Telegram `toml:"telegram"`
+	Base      Base      `toml:"base"`
+	Database  Database  `toml:"database"`
+	Fetcher   Fetcher   `toml:"fetcher"`
+	Holidayer Holidayer `toml:"holidayer"`
+	Telegram  Telegram  `toml:"telegram"`
 }
 
 type Base struct {
@@ -50,6 +51,14 @@ func (f *Fetcher) AuthToken() string {
 	}
 
 	return f.Token
+}
+
+// Holidayer contains holidayer configuration.
+type Holidayer struct {
+	Active  bool          `toml:"active"`
+	Period  int           `toml:"period"`
+	URL     string        `toml:"url"`
+	Timeout time.Duration `toml:"-"`
 }
 
 // Telegram contains Telegram bot configuration.
@@ -99,6 +108,15 @@ func (c *Config) validate() error {
 	}
 	if c.Fetcher.URL == "" {
 		return fmt.Errorf("fetcher URL is required")
+	}
+
+	if c.Holidayer.Period <= 0 {
+		return fmt.Errorf("holidayer period must be greater than zero")
+	}
+	c.Holidayer.Timeout = time.Duration(c.Holidayer.Period) * time.Second
+
+	if c.Holidayer.URL == "" {
+		return fmt.Errorf("holidayer URL is required")
 	}
 
 	if c.Telegram.Token == "" {

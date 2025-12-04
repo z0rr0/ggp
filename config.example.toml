@@ -11,7 +11,12 @@ query_timeout = 5  # in seconds
 active = true
 period = 300  # in seconds
 token = "auth_token"
-url = ""  # http(s) url to data source
+url = ""  # JSON http(s) url to data source
+
+[holidayer]
+active = true
+period = 86400  # in seconds, 1 day
+url = ""  # XML http(s) url to data source, year is <YEAR> string
 
 [telegram]
 active = true
