@@ -94,9 +94,9 @@ func (c *Controller) LoadEvents(ctx context.Context, db *databaser.DB) error {
 }
 
 // PredictLoad generates load predictions for the configured number of hours.
-func (c *Controller) PredictLoad() []databaser.Event {
+func (c *Controller) PredictLoad(hours uint8) []databaser.Event {
 	now := time.Now().UTC()
-	predictions := c.predictor.PredictRange(c.Hours)
+	predictions := c.predictor.PredictRange(hours)
 	events := make([]databaser.Event, 0, len(predictions)+1)
 
 	events = append(events, databaser.Event{Timestamp: now, Predict: c.predictor.GetTypicalLoad(now)})

@@ -110,20 +110,26 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 	period := update.CallbackQuery.Data
 	slog.DebugContext(ctx, "callback", "chatID", chatID, "userID", userID, "period", period)
 
-	var duration time.Duration
+	var (
+		duration     time.Duration
+		predictHours uint8 = 2
+	)
 
 	switch period {
 	case callbackHalfDay:
 		duration = 12 * time.Hour
+		predictHours = 4
 	case callbackDay:
 		duration = 24 * time.Hour
+		predictHours = 6
 	case callbackWeek:
 		duration = 7 * 24 * time.Hour
+		predictHours = 12
 	default:
 		return
 	}
 
-	h.buildGraph(ctx, b, chatID, duration)
+	h.buildGraph(ctx, b, chatID, duration, predictHours)
 }
 
 func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -147,7 +153,22 @@ func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *mod
 		return
 	}
 
-	h.buildGraph(ctx, b, chatID, duration)
+	var predictHours uint8
+
+	switch {
+	case duration <= time.Hour:
+		predictHours = 1
+	case duration <= 4*time.Hour:
+		predictHours = 2
+	case duration <= 12*time.Hour:
+		predictHours = 4
+	case duration <= 24*time.Hour:
+		predictHours = 6
+	default:
+		predictHours = 12
+	}
+
+	h.buildGraph(ctx, b, chatID, duration, predictHours)
 }
 
 func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, text string) {
@@ -163,7 +184,7 @@ func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, 
 	}
 }
 
-func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, duration time.Duration) {
+func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, duration time.Duration, ph uint8) {
 	events, err := h.db.GetEvents(ctx, duration)
 	if err != nil {
 		sendErrorMessage(ctx, err, b, chatID, "Не удалось получить данные за указанный период")
@@ -178,7 +199,7 @@ func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, d
 
 	var prediction []databaser.Event
 	if h.pc != nil {
-		prediction = h.pc.PredictLoad()
+		prediction = h.pc.PredictLoad(ph)
 	}
 
 	imageData, err := plotter.Graph(events, prediction, h.cfg.Base.TimeLocation)
