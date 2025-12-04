@@ -115,13 +115,13 @@ func main() {
 		return
 	}
 
-	predictorCh, err := runPredictor(ctx, cfg, db, eventCh)
+	predictorCtr, predictorCh, err := runPredictor(ctx, cfg, db, eventCh)
 	if err != nil {
 		slog.Error("failed to start predictor", "error", err)
 		return
 	}
 
-	err = runTelegramBot(ctx, cfg, db)
+	err = runTelegramBot(ctx, cfg, db, predictorCtr)
 	if err != nil {
 		slog.Error("telegram bot failed", "error", err)
 		return
@@ -136,13 +136,13 @@ func main() {
 	slog.Info("stopped")
 }
 
-func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB) error {
+func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, pc *predictor.Controller) error {
 	if !cfg.Telegram.Active {
 		slog.Info("telegram bot is inactive")
 		return nil
 	}
 
-	botHandler := watcher.NewBotHandler(db, cfg)
+	botHandler := watcher.NewBotHandler(db, cfg, pc)
 	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(botHandler.DefaultHandler))
 	if err != nil {
 		return fmt.Errorf("failed to create bot: %v", err)
@@ -208,18 +208,18 @@ func runHolidayer(ctx context.Context, cfg *config.Config, db *databaser.DB) (<-
 	return holidayerWorker.Run(ctx)
 }
 
-func runPredictor(ctx context.Context, cfg *config.Config, db *databaser.DB, eventCh <-chan databaser.Event) (<-chan struct{}, error) {
+func runPredictor(ctx context.Context, cfg *config.Config, db *databaser.DB, eventCh <-chan databaser.Event) (*predictor.Controller, <-chan struct{}, error) {
 	if !cfg.Predictor.Active {
 		slog.Info("predictor is inactive")
 		doneCh := make(chan struct{})
 		close(doneCh)
-		return doneCh, nil
+		return nil, doneCh, nil
 	}
 
 	controller, err := predictor.Run(ctx, db, eventCh, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start predictor controller: %v", err)
+		return nil, nil, fmt.Errorf("failed to start predictor controller: %v", err)
 	}
 
-	return controller.Run(ctx), nil
+	return controller, controller.Run(ctx), nil
 }

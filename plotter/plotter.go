@@ -122,22 +122,14 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 	series := []chart.Series{mainSeries}
 
 	if np > 1 {
-		for _, event := range prediction {
-			load := event.FloatLoad()
-			maxY = max(maxY, load)
-
-			pxs = append(pxs, event.Timestamp.Add(5*time.Minute))
-			pys = append(pys, load+5.0)
-		}
-
 		predictionSeries := chart.TimeSeries{
 			Name:    "Prediction",
 			XValues: pxs,
 			YValues: pys,
 			Style: chart.Style{
-				StrokeColor:     chart.ColorRed,
-				StrokeWidth:     3.0,
-				StrokeDashArray: []float64{5.0, 5.0},
+				StrokeWidth: 0.0,
+				DotWidth:    5.0,
+				DotColor:    chart.ColorRed,
 			},
 		}
 		series = append(series, predictionSeries)
