@@ -367,11 +367,11 @@ func TestNewEventFromCSVRecord(t *testing.T) {
 	loc := time.UTC
 
 	tests := []struct {
-		name      string
-		record    []string
-		wantTime  time.Time
-		wantLoad  uint8
-		wantErr   bool
+		name     string
+		record   []string
+		wantTime time.Time
+		wantLoad uint8
+		wantErr  bool
 	}{
 		{
 			name:     "valid record",
