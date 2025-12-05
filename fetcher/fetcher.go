@@ -1,3 +1,4 @@
+// Package fetcher implements a service that periodically fetches club load data.
 package fetcher
 
 import (
@@ -16,20 +17,19 @@ import (
 
 // Club represents the JSON structure of the club data returned by the API.
 type Club struct {
-	ID          int    `json:"id"`
 	Title       string `json:"title"`
-	CurrentLoad string `json:"currentLoad"` // for example, "10%"
+	CurrentLoad string `json:"currentLoad"`  //nolint:tagliatelle
+	ID          int    `json:"id"`
 }
 
 // Fetcher struct holds the configuration for the fetcher.
 type Fetcher struct {
 	Db           *databaser.DB
+	Client       *http.Client
 	URL          string
 	Token        string
 	Timeout      time.Duration
 	QueryTimeout time.Duration
-	Client       *http.Client
-	eventCh      chan databaser.Event
 }
 
 // Run begins the periodic fetching process.
@@ -38,7 +38,7 @@ func (f *Fetcher) Run(ctx context.Context) (<-chan struct{}, <-chan databaser.Ev
 	err := f.Fetch(ctx, eventCh)
 	if err != nil {
 		close(eventCh)
-		return nil, nil, fmt.Errorf("initial fetch: %v", err)
+		return nil, nil, fmt.Errorf("initial fetch: %w", err)
 	}
 
 	doneCh := make(chan struct{})
@@ -75,12 +75,12 @@ func (f *Fetcher) Fetch(ctx context.Context, eventCh chan<- databaser.Event) err
 
 	load, err := f.getLoad(ctx)
 	if err != nil {
-		return fmt.Errorf("get load: %v", err)
+		return fmt.Errorf("get load: %w", err)
 	}
 
 	event := databaser.Event{Load: load, Timestamp: time.Now().UTC().Truncate(time.Second)}
 	if err = f.Db.SaveEvent(ctx, event); err != nil {
-		return fmt.Errorf("save event: %v", err)
+		return fmt.Errorf("save event: %w", err)
 	}
 
 	eventCh <- event
@@ -92,7 +92,7 @@ func (f *Fetcher) Fetch(ctx context.Context, eventCh chan<- databaser.Event) err
 func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.URL, nil)
 	if err != nil {
-		return 0, fmt.Errorf("create request: %v", err)
+		return 0, fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
@@ -113,7 +113,7 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 
 	resp, err := f.Client.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("do request: %v", err)
+		return 0, fmt.Errorf("do request: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -129,7 +129,7 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 	dec := json.NewDecoder(resp.Body)
 
 	if err = dec.Decode(&club); err != nil {
-		return 0, fmt.Errorf("decode JSON: %v", err)
+		return 0, fmt.Errorf("decode JSON: %w", err)
 	}
 
 	if club.CurrentLoad == "" {
@@ -138,7 +138,7 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 
 	p, err := strconv.ParseUint(strings.TrimRight(club.CurrentLoad, "%"), 10, 8)
 	if err != nil {
-		return 0, fmt.Errorf("parse currentLoad=%q: %v", club.CurrentLoad, err)
+		return 0, fmt.Errorf("parse currentLoad=%q: %w", club.CurrentLoad, err)
 	}
 
 	return uint8(p), nil
