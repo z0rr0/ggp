@@ -1,5 +1,9 @@
 # GGP - Golden Gym Predictor Telegram Bot
 
+![Go](https://github.com/z0rr0/ggp/workflows/Go/badge.svg)
+![Version](https://img.shields.io/github/tag/z0rr0/ggp.svg)
+![License](https://img.shields.io/github/license/z0rr0/ggp.svg)
+
 A Telegram bot that tracks gym occupancy, predicts future load using statistical analysis, and displays visual charts.
 
 ## Features
