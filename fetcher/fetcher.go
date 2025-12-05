@@ -18,7 +18,7 @@ import (
 // Club represents the JSON structure of the club data returned by the API.
 type Club struct {
 	Title       string `json:"title"`
-	CurrentLoad string `json:"currentLoad"`  //nolint:tagliatelle
+	CurrentLoad string `json:"currentLoad"` //nolint:tagliatelle
 	ID          int    `json:"id"`
 }
 
