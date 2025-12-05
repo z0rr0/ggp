@@ -23,6 +23,7 @@ linters:
     - wsl
     - wsl_v5
     - forbidigo
+    - noinlineerr
   exclusions:
     generated: lax
     paths:

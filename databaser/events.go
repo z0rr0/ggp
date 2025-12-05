@@ -17,71 +17,6 @@ type Event struct {
 	Predict   float64   `db:"-"`
 }
 
-// FloatLoad returns the load as a float64.
-func (e *Event) FloatLoad() float64 {
-	return float64(e.Load)
-}
-
-// LogValue implements slog.LogValuer for Event.
-func (e *Event) LogValue() slog.Value {
-	return slog.StringValue(fmt.Sprintf("{timestamp: '%s', load: %d}", e.Timestamp.Format(time.RFC3339), e.Load))
-}
-
-// SaveEvent stores an event in the database.
-func (db *DB) SaveEvent(ctx context.Context, event Event) error {
-	const query = `INSERT INTO events (timestamp, load) VALUES (:timestamp, :load);`
-
-	if _, err := db.NamedExecContext(ctx, query, event); err != nil {
-		return fmt.Errorf("insert event: %w", err)
-	}
-
-	return nil
-}
-
-// SaveManyEvents stores multiple events in the database.
-func (db *DB) SaveManyEvents(ctx context.Context, events []Event) error {
-	if len(events) == 0 {
-		return nil
-	}
-
-	const query = `INSERT OR REPLACE INTO events (timestamp, load) VALUES (:timestamp, :load);`
-
-	if _, err := db.NamedExecContext(ctx, query, events); err != nil {
-		return fmt.Errorf("insert events: %w", err)
-	}
-
-	return nil
-}
-
-// GetEvents retrieves events to the current time minus the given period.
-func (db *DB) GetEvents(ctx context.Context, period time.Duration) ([]Event, error) {
-	const query = `SELECT timestamp, load FROM events WHERE timestamp >= ? ORDER BY timestamp;`
-	var (
-		ts     = time.Now().UTC().Add(-period)
-		events []Event
-	)
-
-	slog.DebugContext(ctx, "GetEvents", "query", query, "since", ts)
-	if err := db.SelectContext(ctx, &events, query, ts); err != nil {
-		return nil, fmt.Errorf("failed select events: %w", err)
-	}
-
-	return events, nil
-}
-
-// GetAllEvents retrieves all events with pagination.
-func (db *DB) GetAllEvents(ctx context.Context, limit, offset int) ([]Event, error) {
-	const query = `SELECT timestamp, load FROM events ORDER BY timestamp LIMIT ? OFFSET ?;`
-	var events []Event
-
-	slog.DebugContext(ctx, "GetAllEvents", "query", query, "limit", limit, "offset", offset)
-	if err := db.SelectContext(ctx, &events, query, limit, offset); err != nil {
-		return nil, fmt.Errorf("failed select all events: %w", err)
-	}
-
-	return events, nil
-}
-
 // NewEventFromCSVRecord creates an Event from a CSV record.
 func NewEventFromCSVRecord(record []string, location *time.Location) (*Event, error) {
 	if len(record) < 2 {
@@ -101,6 +36,75 @@ func NewEventFromCSVRecord(record []string, location *time.Location) (*Event, er
 	return &Event{Timestamp: timestamp, Load: uint8(load)}, nil
 }
 
+// FloatLoad returns the load as a float64.
+func (e *Event) FloatLoad() float64 {
+	return float64(e.Load)
+}
+
+// LogValue implements slog.LogValuer for Event.
+func (e *Event) LogValue() slog.Value {
+	return slog.StringValue(fmt.Sprintf("{timestamp: '%s', load: %d}", e.Timestamp.Format(time.RFC3339), e.Load))
+}
+
+// SaveEvent stores an event in the database.
+func (db *DB) SaveEvent(ctx context.Context, event Event) error {
+	const query = `INSERT INTO events (timestamp, load) VALUES (:timestamp, :load);`
+
+	_, err := db.NamedExecContext(ctx, query, event)
+	if err != nil {
+		return fmt.Errorf("insert event: %w", err)
+	}
+
+	return nil
+}
+
+// SaveManyEvents stores multiple events in the database.
+func (db *DB) SaveManyEvents(ctx context.Context, events []Event) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	const query = `INSERT OR REPLACE INTO events (timestamp, load) VALUES (:timestamp, :load);`
+
+	_, err := db.NamedExecContext(ctx, query, events)
+	if err != nil {
+		return fmt.Errorf("insert events: %w", err)
+	}
+
+	return nil
+}
+
+// GetEvents retrieves events to the current time minus the given period.
+func (db *DB) GetEvents(ctx context.Context, period time.Duration) ([]Event, error) {
+	const query = `SELECT timestamp, load FROM events WHERE timestamp >= ? ORDER BY timestamp;`
+	var (
+		ts     = time.Now().UTC().Add(-period)
+		events []Event
+	)
+
+	slog.DebugContext(ctx, "GetEvents", "query", query, "since", ts)
+	err := db.SelectContext(ctx, &events, query, ts)
+	if err != nil {
+		return nil, fmt.Errorf("failed select events: %w", err)
+	}
+
+	return events, nil
+}
+
+// GetAllEvents retrieves all events with pagination.
+func (db *DB) GetAllEvents(ctx context.Context, limit, offset int) ([]Event, error) {
+	const query = `SELECT timestamp, load FROM events ORDER BY timestamp LIMIT ? OFFSET ?;`
+	var events []Event
+
+	slog.DebugContext(ctx, "GetAllEvents", "query", query, "limit", limit, "offset", offset)
+	err := db.SelectContext(ctx, &events, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed select all events: %w", err)
+	}
+
+	return events, nil
+}
+
 // SaveManyEventsTx stores multiple events in the database within a transaction.
 func SaveManyEventsTx(ctx context.Context, tx *sqlx.Tx, events []*Event) error {
 	if len(events) == 0 {
@@ -109,7 +113,8 @@ func SaveManyEventsTx(ctx context.Context, tx *sqlx.Tx, events []*Event) error {
 
 	const query = `INSERT OR REPLACE INTO events (timestamp, load) VALUES (:timestamp, :load);`
 
-	if _, err := tx.NamedExecContext(ctx, query, events); err != nil {
+	_, err := tx.NamedExecContext(ctx, query, events)
+	if err != nil {
 		return fmt.Errorf("insert events: %w", err)
 	}
 

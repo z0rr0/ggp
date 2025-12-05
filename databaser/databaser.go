@@ -32,27 +32,30 @@ func New(ctx context.Context, path string) (*DB, error) {
 		"PRAGMA journal_mode=WAL",   // write-ahead logging
 		"PRAGMA synchronous=NORMAL", // balance between performance and safety
 		"PRAGMA cache_size=-32000",  // 32 mb cache
-		"PRAGMA busy_timeout=5000",  // 5 сек cache wait
+		"PRAGMA busy_timeout=5000",  // 5 sec busy timeout
 		"PRAGMA foreign_keys=ON",    // enable foreign key constraints
 	}
 
 	for _, pragma := range pragmas {
-		if _, err = db.ExecContext(ctx, pragma); err != nil {
+		_, err = db.ExecContext(ctx, pragma)
+		if err != nil {
 			return nil, fmt.Errorf("set pragma %q: %w", pragma, err)
 		}
 	}
 
 	db.SetMaxOpenConns(1) // SQLite doesn't support multiple writers
 
-	if err = db.Ping(); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
+	if err = db.PingContext(ctx); err != nil {
+		closeErr := db.Close()
+		if closeErr != nil {
 			slog.ErrorContext(ctx, "failed to close database after ping error", "error", closeErr)
 		}
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
 	result := &DB{DB: db}
-	if err = result.Init(ctx); err != nil {
+	err = result.Init(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("initialize database: %w", err)
 	}
 
@@ -61,7 +64,8 @@ func New(ctx context.Context, path string) (*DB, error) {
 
 // Init initializes the database schema.
 func (db *DB) Init(ctx context.Context) error {
-	if _, err := db.ExecContext(ctx, initSQL); err != nil {
+	_, err := db.ExecContext(ctx, initSQL)
+	if err != nil {
 		return fmt.Errorf("create schema error: %w", err)
 	}
 
@@ -80,15 +84,18 @@ func InTransaction(ctx context.Context, db *DB, f func(tx *sqlx.Tx) error) error
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 
-	if err = f(tx); err != nil {
+	err = f(tx)
+	if err != nil {
 		err = fmt.Errorf("transaction function error: %w", err)
-		if rbErr := tx.Rollback(); rbErr != nil {
+		rbErr := tx.Rollback()
+		if rbErr != nil {
 			err = errors.Join(err, fmt.Errorf("rollback error: %w", rbErr))
 		}
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
