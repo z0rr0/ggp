@@ -2,151 +2,225 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
-	"strings"
+	"path/filepath"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
-const tokenPrefix = "Bearer "
-
 // Config represents the application configuration.
 type Config struct {
+	Telegram  Telegram  `toml:"telegram"`
 	Base      Base      `toml:"base"`
 	Database  Database  `toml:"database"`
 	Fetcher   Fetcher   `toml:"fetcher"`
 	Holidayer Holidayer `toml:"holidayer"`
 	Predictor Predictor `toml:"predictor"`
-	Telegram  Telegram  `toml:"telegram"`
 }
 
+// Base contains base application settings.
 type Base struct {
+	TimeLocation *time.Location     `toml:"-"`
+	AdminIDs     map[int64]struct{} `toml:"-"`
 	Timezone     string             `toml:"timezone"`
 	Admins       []int64            `toml:"admins"`
 	Debug        bool               `toml:"debug"`
-	TimeLocation *time.Location     `toml:"-"`
-	AdminIDs     map[int64]struct{} `toml:"-"`
 }
 
+// Database contains database connection settings.
 type Database struct {
 	Path         string        `toml:"path"`
-	QueryTimeout int           `toml:"query_timeout"`
 	Timeout      time.Duration `toml:"-"`
+	QueryTimeout int           `toml:"query_timeout"`
 }
 
 // Fetcher contains fetcher configuration.
 type Fetcher struct {
-	Active  bool          `toml:"active"`
-	Period  int           `toml:"period"`
 	Token   string        `toml:"token"`
 	URL     string        `toml:"url"`
 	Timeout time.Duration `toml:"-"`
-}
-
-// AuthToken returns the authorization token with the required prefix.
-func (f *Fetcher) AuthToken() string {
-	if f.Token != "" && !strings.HasPrefix(f.Token, tokenPrefix) {
-		return tokenPrefix + f.Token
-	}
-
-	return f.Token
+	Period  int           `toml:"period"`
+	Active  bool          `toml:"active"`
 }
 
 // Holidayer contains holidayer configuration.
 type Holidayer struct {
-	Active  bool          `toml:"active"`
-	Period  int           `toml:"period"`
 	URL     string        `toml:"url"`
 	Timeout time.Duration `toml:"-"`
+	Period  int           `toml:"period"`
+	Active  bool          `toml:"active"`
 }
 
 // Predictor contains predictor configuration.
 type Predictor struct {
-	Active bool  `toml:"active"`
 	Hours  uint8 `toml:"hours"`
+	Active bool  `toml:"active"`
 }
 
 // Telegram contains Telegram bot configuration.
 type Telegram struct {
-	Active bool   `toml:"active"`
 	Token  string `toml:"token"`
+	Active bool   `toml:"active"`
 }
 
 // Load reads and parses a TOML configuration file.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
 	cfg := new(Config)
-	if err = toml.Unmarshal(data, cfg); err != nil {
+	err = toml.Unmarshal(data, cfg)
+	if err != nil {
 		return nil, fmt.Errorf("parse config file: %w", err)
 	}
 
-	if err = cfg.validate(); err != nil {
+	err = cfg.validate()
+	if err != nil {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
 	return cfg, nil
 }
 
-// validate checks if the configuration is valid.
 func (c *Config) validate() error {
-	if c.Base.Timezone == "" {
-		c.Base.TimeLocation = time.UTC
+	err := c.Base.validate()
+	if err != nil {
+		return fmt.Errorf("base: %w", err)
+	}
+	err = c.Database.validate()
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	err = c.Fetcher.validate()
+	if err != nil {
+		return fmt.Errorf("fetcher: %w", err)
+	}
+	err = c.Holidayer.validate()
+	if err != nil {
+		return fmt.Errorf("holidayer: %w", err)
+	}
+	err = c.Predictor.validate()
+	if err != nil {
+		return fmt.Errorf("predictor: %w", err)
+	}
+	err = c.Telegram.validate()
+	if err != nil {
+		return fmt.Errorf("telegram: %w", err)
+	}
+	return nil
+}
+
+func (b *Base) validate() error {
+	if b.Timezone == "" {
+		b.TimeLocation = time.UTC
 	} else {
-		location, err := time.LoadLocation(c.Base.Timezone)
+		location, err := time.LoadLocation(b.Timezone)
 		if err != nil {
-			return fmt.Errorf("load timezone %q: %w", c.Base.Timezone, err)
+			return fmt.Errorf("invalid timezone %q: %w", b.Timezone, err)
 		}
-		c.Base.TimeLocation = location
+		b.TimeLocation = location
 	}
 
-	if c.Fetcher.Period <= 0 {
-		return fmt.Errorf("fetcher period must be greater than zero")
+	b.AdminIDs = make(map[int64]struct{}, len(b.Admins))
+	for _, adminID := range b.Admins {
+		b.AdminIDs[adminID] = struct{}{}
 	}
-	c.Fetcher.Timeout = time.Duration(c.Fetcher.Period) * time.Second
+	return nil
+}
 
-	if c.Fetcher.Token == "" {
-		return fmt.Errorf("fetcher token is required")
+func (d *Database) validate() error {
+	if d.Path == "" {
+		return errors.New("path is required")
 	}
-	if c.Fetcher.URL == "" {
-		return fmt.Errorf("fetcher URL is required")
+	if d.QueryTimeout <= 0 {
+		return errors.New("query_timeout must be greater than zero")
 	}
+	d.Timeout = time.Duration(d.QueryTimeout) * time.Second
+	return nil
+}
 
-	if c.Holidayer.Period <= 0 {
-		return fmt.Errorf("holidayer period must be greater than zero")
+// AuthToken returns the authorization token with Bearer prefix.
+func (f *Fetcher) AuthToken() string {
+	const prefix = "Bearer "
+	if f.Token == "" {
+		return ""
 	}
-	c.Holidayer.Timeout = time.Duration(c.Holidayer.Period) * time.Second
+	return prefix + f.Token
+}
 
-	if c.Holidayer.URL == "" {
-		return fmt.Errorf("holidayer URL is required")
+func (f *Fetcher) validate() error {
+	if !f.Active {
+		return nil
 	}
+	if f.Period <= 0 {
+		return errors.New("period must be greater than zero")
+	}
+	if f.Token == "" {
+		return errors.New("token is required")
+	}
+	err := validateHTTPURL(f.URL)
+	if err != nil {
+		return fmt.Errorf("url: %w", err)
+	}
+	f.Timeout = time.Duration(f.Period) * time.Second
+	return nil
+}
 
-	if c.Predictor.Hours < 1 || c.Predictor.Hours > 24 {
-		return fmt.Errorf("predictor hours must be between 1 and 24")
+func (h *Holidayer) validate() error {
+	if !h.Active {
+		return nil
 	}
+	if h.Period <= 0 {
+		return errors.New("period must be greater than zero")
+	}
+	err := validateHTTPURL(h.URL)
+	if err != nil {
+		return fmt.Errorf("url: %w", err)
+	}
+	h.Timeout = time.Duration(h.Period) * time.Second
+	return nil
+}
 
-	if c.Telegram.Token == "" {
-		return fmt.Errorf("telegram token is required")
+func (p *Predictor) validate() error {
+	if !p.Active {
+		return nil
 	}
+	if p.Hours < 1 || p.Hours > 24 {
+		return errors.New("hours must be between 1 and 24")
+	}
+	return nil
+}
 
-	if c.Database.Path == "" {
-		return fmt.Errorf("database path is required")
+func (t *Telegram) validate() error {
+	if !t.Active {
+		return nil
 	}
-	if c.Database.QueryTimeout <= 0 {
-		return fmt.Errorf("database query timeout is required")
+	if t.Token == "" {
+		return errors.New("token is required")
 	}
-	c.Database.Timeout = time.Duration(c.Database.QueryTimeout) * time.Second
+	return nil
+}
 
-	adminsMap := make(map[int64]struct{})
-	for _, adminID := range c.Base.Admins {
-		adminsMap[adminID] = struct{}{}
+func validateHTTPURL(rawURL string) error {
+	if rawURL == "" {
+		return errors.New("empty URL")
 	}
-	c.Base.AdminIDs = adminsMap
-
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("invalid scheme %q, must be http or https", u.Scheme)
+	}
+	if u.Host == "" {
+		return errors.New("missing host")
+	}
 	return nil
 }
