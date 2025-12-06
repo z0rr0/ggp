@@ -10,12 +10,14 @@ import (
 	"github.com/z0rr0/ggp/databaser"
 )
 
+// Controller manages the predictor and handles incoming events.
 type Controller struct {
 	predictor *Predictor
 	eventCh   <-chan databaser.Event
 	Hours     uint8
 }
 
+// Run initializes and returns a new Controller with the predictor and event channel.
 func Run(ctx context.Context, db *databaser.DB, eventCh <-chan databaser.Event, cfg *config.Config) (*Controller, error) {
 	holidayChecker, err := NewRussianHolidayChecker(ctx, db, cfg.Base.TimeLocation)
 	if err != nil {

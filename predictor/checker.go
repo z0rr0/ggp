@@ -11,6 +11,7 @@ import (
 // DayType defines the type of day.
 type DayType uint8
 
+// Day type constants representing days of the week and holidays.
 const (
 	Monday DayType = iota
 	Tuesday
@@ -34,6 +35,7 @@ type monthDay struct {
 	day   uint8
 }
 
+// RussianHolidayChecker implements HolidayChecker for Russian holidays.
 type RussianHolidayChecker struct {
 	fixedHolidays map[monthDay]string
 }
@@ -50,6 +52,7 @@ func NewRussianHolidayChecker(ctx context.Context, db *databaser.DB, location *t
 	fixedHolidays := make(map[monthDay]string)
 	for _, h := range holidays {
 		_, m, d := h.Day.Date()
+		//nolint:gosec // G115: month (1-12) and day (1-31) always fit in uint8
 		fixedHolidays[monthDay{month: uint8(m), day: uint8(d)}] = h.Title
 	}
 
@@ -59,6 +62,7 @@ func NewRussianHolidayChecker(ctx context.Context, db *databaser.DB, location *t
 // IsHoliday checks if the given date is a holiday.
 func (c *RussianHolidayChecker) IsHoliday(t time.Time) bool {
 	_, m, d := t.Date()
+	//nolint:gosec // G115: month (1-12) and day (1-31) always fit in uint8
 	md := monthDay{month: uint8(m), day: uint8(d)}
 
 	_, isFixed := c.fixedHolidays[md]
@@ -68,6 +72,7 @@ func (c *RussianHolidayChecker) IsHoliday(t time.Time) bool {
 // HolidayTitle returns the title of the holiday for the given date.
 func (c *RussianHolidayChecker) HolidayTitle(t time.Time) string {
 	_, m, d := t.Date()
+	//nolint:gosec // G115: month (1-12) and day (1-31) always fit in uint8
 	md := monthDay{month: uint8(m), day: uint8(d)}
 	return c.fixedHolidays[md]
 }

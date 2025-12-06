@@ -20,10 +20,10 @@ const (
 
 // HourlyStats is a storage for hourly statistics.
 type HourlyStats struct {
+	LastUpdate  time.Time // last update time
 	WeightedSum float64   // Sum(load × weight)
 	TotalWeight float64   // Sum(weight)
 	Count       uint64    // total events counted
-	LastUpdate  time.Time // last update time
 }
 
 // Prediction represents a load prediction for a specific hour.
@@ -37,14 +37,14 @@ type Prediction struct {
 
 // Predictor holds the statistics and provides methods to update and retrieve predictions.
 type Predictor struct {
-	mu                  sync.RWMutex
 	stats               [dayTypesCount][hoursInDay]*HourlyStats
+	recentEvents        []databaser.Event
 	holidayChecker      HolidayChecker
+	mu                  sync.RWMutex
 	decayLambda         float64
 	minWeight           float64
-	recentEvents        []databaser.Event
-	maxRecentCount      int
 	confidenceThreshold float64
+	maxRecentCount      int
 }
 
 // New creates a new Predictor instance with the provided HolidayChecker.
@@ -58,21 +58,13 @@ func New(holidayChecker HolidayChecker) *Predictor {
 	}
 
 	// initialize the statistics array
-	for d := 0; d < 8; d++ {
-		for h := 0; h < 24; h++ {
+	for d := range dayTypesCount {
+		for h := range hoursInDay {
 			p.stats[d][h] = &HourlyStats{}
 		}
 	}
 
 	return p
-}
-
-// getDayType determines the DayType for the given time.
-func (p *Predictor) getDayType(t time.Time) DayType {
-	if p.holidayChecker != nil && p.holidayChecker.IsHoliday(t) {
-		return Holiday
-	}
-	return DayType(t.Weekday())
 }
 
 // AddEvent adds a new event to the predictor and updates the statistics.
@@ -102,6 +94,106 @@ func (p *Predictor) AddEvent(event databaser.Event) {
 	if len(p.recentEvents) > p.maxRecentCount {
 		p.recentEvents = p.recentEvents[1:]
 	}
+}
+
+// Predict returns a load prediction for the specified number of hours ahead.
+func (p *Predictor) Predict(hoursAhead uint8) Prediction {
+	var basePrediction, confidence float64
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	now := time.Now().UTC()
+	targetTime := now.Add(time.Duration(hoursAhead) * time.Hour)
+
+	dayType := p.getDayType(targetTime)
+	hour := targetTime.Hour()
+	stats := p.stats[dayType][hour] // day-hour stats
+	basePrediction = p.predictWithBlending(targetTime, hour)
+
+	switch {
+	case stats.TotalWeight >= p.minWeight:
+		confidence = p.calculateConfidence(stats, dayType)
+	case dayType == Holiday:
+		sundayStats := p.stats[Sunday][hour]
+		if sundayStats.TotalWeight >= p.minWeight {
+			confidence = 0.5
+		} else {
+			confidence = 0.3
+		}
+	default:
+		basePrediction = p.fallbackPrediction(int(dayType))
+		confidence = 0.3
+	}
+
+	// trend correction for short-term predictions
+	if hoursAhead <= 3 && len(p.recentEvents) >= 20 {
+		trend := p.calculateTrend()
+		trendWeight := 0.3 / float64(hoursAhead)
+		basePrediction += trend * trendWeight * float64(hoursAhead)
+	}
+
+	basePrediction = max(0.0, min(100.0, basePrediction))
+
+	return Prediction{
+		TargetTime: targetTime,
+		Hour:       hour,
+		Load:       basePrediction,
+		Confidence: confidence,
+		IsHoliday:  dayType == Holiday,
+	}
+}
+
+// PredictRange returns load predictions for the next maxHours hours.
+func (p *Predictor) PredictRange(maxHours uint8) []Prediction {
+	var h uint8
+	predictions := make([]Prediction, maxHours)
+
+	for h = 1; h <= maxHours; h++ {
+		predictions[h-1] = p.Predict(h)
+	}
+
+	return predictions
+}
+
+// String implements the Stringer interface for Predictor.
+// It returns statistics for all day types and hours.
+func (p *Predictor) String() string {
+	var s strings.Builder
+
+	for i := range dayTypesCount {
+		for j := range hoursInDay {
+			stats := p.stats[i][j]
+			s.WriteString(fmt.Sprintf("DayType %d Hour %02d: Count=%d WeightedSum=%.2f TotalWeight=%.2f LastUpdate=%s\n",
+				i, j, stats.Count, stats.WeightedSum, stats.TotalWeight, stats.LastUpdate.Format(time.RFC3339)))
+		}
+	}
+
+	return s.String()
+}
+
+// GetTypicalLoad returns the typical load for the given time based on historical data.
+func (p *Predictor) GetTypicalLoad(t time.Time) float64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	dayType := p.getDayType(t)
+	hour := t.Hour()
+	stats := p.stats[dayType][hour]
+
+	if stats.TotalWeight >= p.minWeight {
+		return stats.WeightedSum / stats.TotalWeight
+	}
+
+	return p.fallbackPrediction(int(dayType))
+}
+
+// getDayType determines the DayType for the given time.
+func (p *Predictor) getDayType(t time.Time) DayType {
+	if p.holidayChecker != nil && p.holidayChecker.IsHoliday(t) {
+		return Holiday
+	}
+	//nolint:gosec // G115: Weekday() returns 0-6, always fits in uint8
+	return DayType(t.Weekday())
 }
 
 // calculateTrend calculates the trend of recent events using linear regression.
@@ -174,6 +266,7 @@ func (p *Predictor) predictWithBlending(targetTime time.Time, hour int) float64 
 	isHoliday := p.holidayChecker != nil && p.holidayChecker.IsHoliday(targetTime)
 
 	if !isHoliday {
+		//nolint:gosec // G115: Weekday() returns 0-6, always fits in uint8
 		dayType := DayType(targetTime.Weekday())
 		return p.getWeightedAverage(dayType, hour)
 	}
@@ -201,95 +294,4 @@ func (p *Predictor) predictWithBlending(targetTime time.Time, hour int) float64 
 	}
 
 	return (holidayAvg*holidayWeight + sundayAvg*sundayWeight) / totalWeight
-}
-
-// Predict returns a load prediction for the specified number of hours ahead.
-func (p *Predictor) Predict(hoursAhead uint8) Prediction {
-	var basePrediction, confidence float64
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	now := time.Now().UTC()
-	targetTime := now.Add(time.Duration(hoursAhead) * time.Hour)
-
-	dayType := p.getDayType(targetTime)
-	hour := targetTime.Hour()
-	stats := p.stats[dayType][hour] // day-hour stats
-	basePrediction = p.predictWithBlending(targetTime, hour)
-
-	switch {
-	case stats.TotalWeight >= p.minWeight:
-		confidence = p.calculateConfidence(stats, dayType)
-	case dayType == Holiday:
-		sundayStats := p.stats[Sunday][hour]
-		if sundayStats.TotalWeight >= p.minWeight {
-			confidence = 0.5
-		} else {
-			confidence = 0.3
-		}
-	default:
-		basePrediction = p.fallbackPrediction(int(dayType))
-		confidence = 0.3
-	}
-
-	// trend correction for short-term predictions
-	if hoursAhead <= 3 && len(p.recentEvents) >= 20 {
-		trend := p.calculateTrend()
-		trendWeight := 0.3 / float64(hoursAhead)
-		basePrediction += trend * trendWeight * float64(hoursAhead)
-	}
-
-	basePrediction = max(0.0, min(100.0, basePrediction))
-
-	return Prediction{
-		TargetTime: targetTime,
-		Hour:       hour,
-		Load:       basePrediction,
-		Confidence: confidence,
-		IsHoliday:  dayType == Holiday,
-	}
-}
-
-// PredictRange returns load predictions for the next maxHours hours.
-func (p *Predictor) PredictRange(maxHours uint8) []Prediction {
-	var h uint8
-	predictions := make([]Prediction, maxHours)
-
-	for h = 1; h <= maxHours; h++ {
-		predictions[h-1] = p.Predict(h)
-	}
-
-	return predictions
-}
-
-// String implements the Stringer interface for Predictor.
-// It returns statistics for all day types and hours.
-func (p *Predictor) String() string {
-	var s strings.Builder
-
-	for i := 0; i < dayTypesCount; i++ {
-		for j := 0; j < hoursInDay; j++ {
-			stats := p.stats[i][j]
-			s.WriteString(fmt.Sprintf("DayType %d Hour %02d: Count=%d WeightedSum=%.2f TotalWeight=%.2f LastUpdate=%s\n",
-				i, j, stats.Count, stats.WeightedSum, stats.TotalWeight, stats.LastUpdate.Format(time.RFC3339)))
-		}
-	}
-
-	return s.String()
-}
-
-// GetTypicalLoad returns the typical load for the given time based on historical data.
-func (p *Predictor) GetTypicalLoad(t time.Time) float64 {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	dayType := p.getDayType(t)
-	hour := t.Hour()
-	stats := p.stats[dayType][hour]
-
-	if stats.TotalWeight >= p.minWeight {
-		return stats.WeightedSum / stats.TotalWeight
-	}
-
-	return p.fallbackPrediction(int(dayType))
 }
