@@ -367,9 +367,9 @@ func TestNewEventFromCSVRecord(t *testing.T) {
 	loc := time.UTC
 
 	tests := []struct {
+		wantTime time.Time
 		name     string
 		record   []string
-		wantTime time.Time
 		wantLoad uint8
 		wantErr  bool
 	}{
@@ -571,9 +571,9 @@ func TestGetHolidays(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		wantFirst string
 		year      int
 		wantCount int
-		wantFirst string
 	}{
 		{
 			name:      "year 2024",

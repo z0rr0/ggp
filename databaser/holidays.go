@@ -11,8 +11,9 @@ import (
 
 // Holiday represents a holiday with a date and title.
 type Holiday struct {
-	Day   *DateOnly `db:"day"`
-	Title string    `db:"title"`
+	Created time.Time `db:"created"`
+	Day     *DateOnly `db:"day"`
+	Title   string    `db:"title"`
 }
 
 // LogValue implements slog.LogValuer for Event.
@@ -38,7 +39,7 @@ func SaveManyHolidaysTx(ctx context.Context, tx *sqlx.Tx, holidays []Holiday) er
 
 	const (
 		queryDelete = `DELETE FROM holidays WHERE day BETWEEN ? AND ?;`
-		queryInsert = `INSERT OR REPLACE INTO holidays (day, title) VALUES (:day, :title);`
+		queryInsert = `INSERT OR REPLACE INTO holidays (day, title, created) VALUES (:day, :title, :created);`
 	)
 
 	resultDelete, err := tx.ExecContext(ctx, queryDelete, minDay.StartOfYear(), maxDay.EndOfYear())
@@ -71,7 +72,7 @@ func SaveManyHolidaysTx(ctx context.Context, tx *sqlx.Tx, holidays []Holiday) er
 func (db *DB) GetHolidays(ctx context.Context, year int, location *time.Location) ([]Holiday, error) {
 	day := DateOnly(time.Date(year, 1, 1, 0, 0, 0, 0, location))
 
-	const query = `SELECT day, title FROM holidays WHERE day BETWEEN ? AND ? ORDER BY day;`
+	const query = `SELECT day, title, created FROM holidays WHERE day BETWEEN ? AND ? ORDER BY day;`
 	var holidays []Holiday
 
 	slog.DebugContext(ctx, "GetHolidays", "query", query, "start", day.StartOfYear(), "end", day.EndOfYear())

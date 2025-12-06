@@ -202,7 +202,9 @@ func (hp *HolidayParams) getHolidays(ctx context.Context, url string) ([]databas
 		return nil, nil
 	}
 
+	now := time.Now().UTC()
 	holidays := make([]databaser.Holiday, 0, n)
+
 	for _, day := range calendar.Days.Items {
 		if day.Type == holidayTypeHoliday || day.Type == holidayTypeShortDay {
 			dateParsed, dateErr := time.Parse(dateFormat, day.Date)
@@ -214,8 +216,9 @@ func (hp *HolidayParams) getHolidays(ctx context.Context, url string) ([]databas
 			holidays = append(
 				holidays,
 				databaser.Holiday{
-					Day:   &dt,
-					Title: holidayTitles[day.Holiday], // not required
+					Day:     &dt,
+					Title:   holidayTitles[day.Holiday], // not required
+					Created: now,
 				},
 			)
 		}

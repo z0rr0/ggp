@@ -856,10 +856,10 @@ func TestXMLCalendar_Unmarshal(t *testing.T) {
 	tests := []struct {
 		name          string
 		xml           string
+		wantFirstDay  string
 		wantYear      int
 		wantHolidays  int
 		wantDays      int
-		wantFirstDay  string
 		wantFirstType int
 	}{
 		{
