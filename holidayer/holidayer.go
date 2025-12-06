@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -37,15 +38,19 @@ import (
 const (
 	holidayTypeHoliday  = 1
 	holidayTypeShortDay = 2
-	dateFormat          = "01.02" // format used in the XML response for dates (MM.DD)
+	dateFormat          = "01.02" // Go time format for Month.Day (e.g., "01.01" for January 1st)
 	yearTemplate        = "<YEAR>"
+	xmlContentType      = "text/xml"
+	appXMLContentType   = "application/xml"
+	// maxResponseSize limits response body to 1MB to prevent memory exhaustion.
+	maxResponseSize = 1 << 20
 )
 
 // XMLCalendar is the root structure of the XML response.
 type XMLCalendar struct {
-	Year     int         `xml:"year,attr"`
 	Holidays XMLHolidays `xml:"holidays"`
 	Days     XMLDays     `xml:"days"`
+	Year     int         `xml:"year,attr"`
 }
 
 // XMLHolidays presents the holidays section.
@@ -55,8 +60,8 @@ type XMLHolidays struct {
 
 // XMLHoliday is a holiday entry in the calendar.
 type XMLHoliday struct {
-	ID    int    `xml:"id,attr"`
 	Title string `xml:"title,attr"`
+	ID    int    `xml:"id,attr"`
 }
 
 // XMLDays presents the days section.
@@ -66,27 +71,27 @@ type XMLDays struct {
 
 // XMLDay is a day entry in the calendar.
 type XMLDay struct {
-	Date    string `xml:"d,attr"` // format: "01.01"
-	Type    int    `xml:"t,attr"` // 1 - holiday, 2 - short day
-	Holiday int    `xml:"h,attr"` // holiday ID
-	From    string `xml:"f,attr"` // move holiday from date
+	Date    string `xml:"d,attr"`
+	From    string `xml:"f,attr"`
+	Type    int    `xml:"t,attr"`
+	Holiday int    `xml:"h,attr"`
 }
 
 // HolidayParams struct holds the configuration for the fetcher.
 type HolidayParams struct {
 	Db           *databaser.DB
 	Location     *time.Location
+	Client       *http.Client
 	URL          string
 	Timeout      time.Duration
 	QueryTimeout time.Duration
-	Client       *http.Client
 }
 
 // Run begins the periodic fetching process.
 func (hp *HolidayParams) Run(ctx context.Context) (<-chan struct{}, error) {
 	err := hp.Fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("initial holidays fetch: %v", err)
+		return nil, fmt.Errorf("initial holidays fetch: %w", err)
 	}
 
 	doneCh := make(chan struct{})
@@ -124,7 +129,7 @@ func (hp *HolidayParams) Fetch(ctx context.Context) error {
 	slog.DebugContext(ctx, "fetching holidays", "url", url, "year", year)
 	holidays, err := hp.getHolidays(ctx, url)
 	if err != nil {
-		return fmt.Errorf("get holidays: %v", err)
+		return fmt.Errorf("get holidays: %w", err)
 	}
 
 	// add next year holidays
@@ -134,7 +139,7 @@ func (hp *HolidayParams) Fetch(ctx context.Context) error {
 	slog.DebugContext(ctx, "fetching holidays", "url", url, "year", year)
 	holidaysNext, err := hp.getHolidays(ctx, url)
 	if err != nil {
-		return fmt.Errorf("get holidays for next year: %v", err)
+		return fmt.Errorf("get holidays for next year: %w", err)
 	}
 
 	holidays = append(holidays, holidaysNext...)
@@ -143,7 +148,7 @@ func (hp *HolidayParams) Fetch(ctx context.Context) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("save holidays: %v", err)
+		return fmt.Errorf("save holidays: %w", err)
 	}
 
 	slog.InfoContext(ctx, "holidayer fetched", "count", len(holidays))
@@ -154,14 +159,18 @@ func (hp *HolidayParams) Fetch(ctx context.Context) error {
 func (hp *HolidayParams) getHolidays(ctx context.Context, url string) ([]databaser.Holiday, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %v", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := hp.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %v", err)
+		return nil, fmt.Errorf("do request: %w", err)
 	}
 	defer func() {
+		// drain remaining body to allow connection reuse
+		if _, errCopy := io.Copy(io.Discard, resp.Body); errCopy != nil {
+			slog.Error("drain body error", "error", errCopy)
+		}
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			slog.Error("close body error", "error", closeErr)
 		}
@@ -171,10 +180,15 @@ func (hp *HolidayParams) getHolidays(ctx context.Context, url string) ([]databas
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, xmlContentType) && !strings.HasPrefix(contentType, appXMLContentType) {
+		return nil, fmt.Errorf("unexpected content type: %s", contentType)
+	}
+
 	var calendar XMLCalendar
-	err = xml.NewDecoder(resp.Body).Decode(&calendar)
+	err = xml.NewDecoder(io.LimitReader(resp.Body, maxResponseSize)).Decode(&calendar)
 	if err != nil {
-		return nil, fmt.Errorf("decode response: %v", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	holidayTitles := make(map[int]string, len(calendar.Holidays.Items))
