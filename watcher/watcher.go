@@ -17,6 +17,7 @@ import (
 	"github.com/z0rr0/ggp/predictor"
 )
 
+// Telegram bot command constants.
 const (
 	StartCommand   = "/start"
 	CallbackPrefix = "/period"
@@ -29,16 +30,19 @@ const (
 	dateTimeFormat = "02.01.2006 15:04"
 )
 
+// BotHandler handles Telegram bot interactions for displaying load graphs.
 type BotHandler struct {
 	db  *databaser.DB
 	cfg *config.Config
 	pc  *predictor.Controller
 }
 
+// NewBotHandler creates a new BotHandler with the given dependencies.
 func NewBotHandler(db *databaser.DB, cfg *config.Config, pc *predictor.Controller) *BotHandler {
 	return &BotHandler{db: db, cfg: cfg, pc: pc}
 }
 
+// HandleStart handles the /start command and shows the main keyboard.
 func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
 	start := time.Now()
 	defer func() {
@@ -62,6 +66,7 @@ func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models
 	}
 }
 
+// HandleMenu handles the menu button press and shows period selection.
 func (h *BotHandler) HandleMenu(ctx context.Context, b *bot.Bot, update *models.Update) {
 	start := time.Now()
 	defer func() {
@@ -90,6 +95,7 @@ func (h *BotHandler) HandleMenu(ctx context.Context, b *bot.Bot, update *models.
 	}
 }
 
+// HandleCallback handles inline keyboard button callbacks for period selection.
 func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
 	start := time.Now()
 	defer func() {
@@ -112,7 +118,7 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 
 	var (
 		duration     time.Duration
-		predictHours uint8 = 2
+		predictHours uint8
 	)
 
 	switch period {
@@ -132,6 +138,7 @@ func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *mod
 	h.buildGraph(ctx, b, chatID, duration, predictHours)
 }
 
+// DefaultHandler handles all other messages, allowing admin users to request custom duration graphs.
 func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	start := time.Now()
 	defer func() {
@@ -172,15 +179,17 @@ func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *mod
 }
 
 func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, text string) {
-	slog.ErrorContext(ctx, "sending error message", "error", err)
+	if err != nil {
+		slog.ErrorContext(ctx, "sending error message", "error", err)
+	}
 
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+	_, sendErr := b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: chatID,
 		Text:   text,
 	})
 
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to send message", "error", err)
+	if sendErr != nil {
+		slog.ErrorContext(ctx, "failed to send message", "error", sendErr)
 	}
 }
 

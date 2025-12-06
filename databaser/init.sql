@@ -13,6 +13,7 @@ CREATE INDEX IF NOT EXISTS idx_events_load ON events (load);
 
 CREATE TABLE IF NOT EXISTS holidays
 (
-    day   DATE         NOT NULL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL
+    day     DATE         NOT NULL PRIMARY KEY,
+    title   VARCHAR(255) NOT NULL,
+    created DATETIME DEFAULT '1970-01-01 00:00:00'
 );
