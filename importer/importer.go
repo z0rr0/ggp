@@ -4,11 +4,13 @@ package importer
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -27,9 +29,10 @@ type importReader struct {
 
 // ImportCSV imports events from a CSV file into the database.
 func ImportCSV(db *databaser.DB, importPath string, timeout time.Duration, location *time.Location) error {
-	f, err := os.Open(importPath)
+	cleanPath := filepath.Clean(importPath)
+	f, err := os.Open(cleanPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file %q: %w", cleanPath, err)
 	}
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
@@ -57,7 +60,7 @@ func (r *importReader) Read() iter.Seq[*databaser.Event] {
 		i := 1
 		for {
 			record, err := csvReader.Read()
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return
 			}
 			if err != nil {
@@ -120,6 +123,10 @@ func (r *importReader) InsertEvents(ctx context.Context, timeout time.Duration) 
 			n := len(rows)
 			slog.Info("chunk imported events", "count", n)
 			count += n
+		}
+		// check for read errors that occurred during iteration
+		if r.err != nil {
+			return r.err
 		}
 		return nil
 	})
