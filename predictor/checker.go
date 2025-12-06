@@ -12,14 +12,15 @@ import (
 type DayType uint8
 
 // Day type constants representing days of the week and holidays.
+// Order matches time.Weekday (Sunday=0, Monday=1, etc.)
 const (
-	Monday DayType = iota
+	Sunday DayType = iota
+	Monday
 	Tuesday
 	Wednesday
 	Thursday
 	Friday
 	Saturday
-	Sunday
 	Holiday // predefined holiday
 )
 

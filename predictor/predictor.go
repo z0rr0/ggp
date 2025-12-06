@@ -92,7 +92,8 @@ func (p *Predictor) AddEvent(event databaser.Event) {
 
 	p.recentEvents = append(p.recentEvents, event)
 	if len(p.recentEvents) > p.maxRecentCount {
-		p.recentEvents = p.recentEvents[1:]
+		copy(p.recentEvents, p.recentEvents[1:])
+		p.recentEvents = p.recentEvents[:p.maxRecentCount]
 	}
 }
 
@@ -283,13 +284,13 @@ func (p *Predictor) predictWithBlending(targetTime time.Time, hour int) float64 
 		return averageLoad
 	}
 
-	holidayAvg := 0.0
-	if holidayStats.TotalWeight > 0 {
+	holidayAvg := averageLoad
+	if holidayWeight > 0 {
 		holidayAvg = holidayStats.WeightedSum / holidayStats.TotalWeight
 	}
 
-	sundayAvg := 0.0
-	if sundayStats.TotalWeight > 0 {
+	sundayAvg := averageLoad
+	if sundayWeight > 0 {
 		sundayAvg = sundayStats.WeightedSum / sundayStats.TotalWeight
 	}
 
