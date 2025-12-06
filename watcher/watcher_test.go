@@ -153,7 +153,7 @@ func TestNewBotHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewBotHandler(tt.db, tt.cfg, nil)
 			if h == nil {
-				t.Error("NewBotHandler() returned nil")
+				t.Fatal("NewBotHandler() returned nil")
 			}
 			if h.db != tt.db {
 				t.Errorf("NewBotHandler() db = %v, want %v", h.db, tt.db)
@@ -530,7 +530,7 @@ func TestMockBotMethods(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 		if msg == nil {
-			t.Error("expected message, got nil")
+			t.Fatal("expected message, got nil")
 		}
 		if msg.Chat.ID != 123 {
 			t.Errorf("chat ID = %d, want 123", msg.Chat.ID)
