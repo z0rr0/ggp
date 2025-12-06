@@ -4,6 +4,7 @@ package plotter
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	// Time format constants
+	// Time format constants.
 	dtFormatSecond = iota + 1
 	dtFormatMinute
 	dtFormatHour
@@ -25,7 +26,7 @@ const (
 )
 
 const (
-	// periods defines time durations for different ranges
+	// Periods defines time durations for different ranges.
 	periodSecond = time.Minute * 2
 	periodMinute = time.Hour * 24
 	periodHour   = time.Hour * 72
@@ -34,25 +35,26 @@ const (
 	periodMonth  = time.Hour * 24 * 365 * 2
 )
 
-var (
-	// dtFormatMap maps time format constants to their corresponding layout strings.
-	// Full format "2006-01-02T15:04:05Z07:00"
-	dtFormatMap = map[int]string{
-		dtFormatSecond: "5s",
-		dtFormatMinute: "15:04",
-		dtFormatHour:   "Mon 15:00",
-		dtFormatDay:    "Mon _2 Jan",
-		dtFormatWeek:   "Monday _2",
-		dtFormatMonth:  "01.2006",
-		dtFormatYear:   "2006",
-	}
+// dtFormatMap maps time format constants to their corresponding layout strings.
+// Full format "2006-01-02T15:04:05Z07:00".
+//
+//nolint:gochecknoglobals // package-level lookup table
+var dtFormatMap = map[int]string{
+	dtFormatSecond: "5s",
+	dtFormatMinute: "15:04",
+	dtFormatHour:   "Mon 15:00",
+	dtFormatDay:    "Mon _2 Jan",
+	dtFormatWeek:   "Monday _2",
+	dtFormatMonth:  "01.2006",
+	dtFormatYear:   "2006",
+}
 
-	bufferPool = sync.Pool{
-		New: func() any {
-			return new(bytes.Buffer)
-		},
-	}
-)
+//nolint:gochecknoglobals // sync.Pool for buffer reuse
+var bufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
 
 func getDateFormat(events []time.Time) string {
 	n := len(events)
@@ -141,17 +143,17 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 	graph := chart.Chart{
 		XAxis: chart.XAxis{
 			Name: "Time",
-			ValueFormatter: func(v interface{}) string {
-				if vt, ok := v.(time.Time); ok {
+			ValueFormatter: func(v any) string {
+				switch vt := v.(type) {
+				case time.Time:
 					return vt.In(location).Format(layout)
-				}
-				if vt, ok := v.(int64); ok {
+				case int64:
 					return time.Unix(0, vt).In(location).Format(layout)
-				}
-				if vt, ok := v.(float64); ok {
+				case float64:
 					return time.Unix(0, int64(vt)).In(location).Format(layout)
+				default:
+					return ""
 				}
-				return ""
 			},
 			GridMajorStyle: chart.Style{
 				StrokeColor: chart.ColorAlternateGray,
@@ -180,14 +182,21 @@ func Graph(events, prediction []databaser.Event, location *time.Location) ([]byt
 		Series: series,
 	}
 
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf, ok := bufferPool.Get().(*bytes.Buffer)
+	if !ok {
+		buf = new(bytes.Buffer)
+	}
 	buf.Reset()
 	defer bufferPool.Put(buf)
 
 	err := graph.Render(chart.PNG, buf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("render graph: %w", err)
 	}
 
-	return buf.Bytes(), nil
+	// copy bytes to avoid data corruption when buffer is reused from pool
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+
+	return result, nil
 }
