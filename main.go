@@ -144,14 +144,15 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, p
 	}
 
 	botHandler := watcher.NewBotHandler(db, cfg, pc)
-	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(botHandler.DefaultHandler))
+	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(botHandler.WrapDefaultHandler))
 	if err != nil {
 		return fmt.Errorf("failed to create bot: %w", err)
 	}
 
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.StartCommand, bot.MatchTypeExact, botHandler.HandleStart)
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.MenuCommand, bot.MatchTypeExact, botHandler.HandleMenu)
-	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, watcher.CallbackPrefix, bot.MatchTypePrefix, botHandler.HandleCallback)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStart, bot.MatchTypeExact, botHandler.WrapHandleStart)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdWeek, bot.MatchTypeExact, botHandler.WrapHandleWeek)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdDay, bot.MatchTypeExact, botHandler.WrapHandleDay)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdHalfDay, bot.MatchTypeExact, botHandler.WrapHandleHalfDay)
 
 	slog.Info("bot is starting")
 	b.Start(ctx)

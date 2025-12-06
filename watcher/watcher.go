@@ -17,16 +17,21 @@ import (
 	"github.com/z0rr0/ggp/predictor"
 )
 
+// BotAPI defines the methods needed from the Telegram bot.
+type BotAPI interface {
+	SendMessage(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error)
+	SendPhoto(ctx context.Context, params *bot.SendPhotoParams) (*models.Message, error)
+}
+
 // Telegram bot command constants.
 const (
-	StartCommand   = "/start"
-	CallbackPrefix = "/period"
-	MenuCommand    = "📋 Меню"
+	CmdStart   = "/start"
+	CmdWeek    = "📆 Неделя"
+	CmdDay     = "📅 День"
+	CmdHalfDay = "🕒 Полдня"
+)
 
-	callbackHalfDay = CallbackPrefix + "HalfDay"
-	callbackDay     = CallbackPrefix + "Day"
-	callbackWeek    = CallbackPrefix + "Week"
-
+const (
 	dateTimeFormat = "02.01.2006 15:04"
 )
 
@@ -42,113 +47,117 @@ func NewBotHandler(db *databaser.DB, cfg *config.Config, pc *predictor.Controlle
 	return &BotHandler{db: db, cfg: cfg, pc: pc}
 }
 
+// Wrapper methods for bot.HandlerFunc compatibility
+
+// WrapHandleStart wraps HandleStart for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleStart(ctx, b, update)
+}
+
+// WrapHandleWeek wraps HandleWeek for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleWeek(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleWeek(ctx, b, update)
+}
+
+// WrapHandleDay wraps HandleDay for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleDay(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleDay(ctx, b, update)
+}
+
+// WrapHandleHalfDay wraps HandleHalfDay for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleHalfDay(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleHalfDay(ctx, b, update)
+}
+
+// WrapDefaultHandler wraps DefaultHandler for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapDefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.DefaultHandler(ctx, b, update)
+}
+
 // HandleStart handles the /start command and shows the main keyboard.
-func (h *BotHandler) HandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
+func (h *BotHandler) HandleStart(ctx context.Context, b BotAPI, update *models.Update) {
 	start := time.Now()
 	defer func() {
 		slog.InfoContext(ctx, "handle start completed", "duration", time.Since(start))
 	}()
 
+	if update.Message == nil {
+		slog.WarnContext(ctx, "HandleStart: update.Message is nil")
+		return
+	}
+
 	kb := &models.ReplyKeyboardMarkup{
 		Keyboard: [][]models.KeyboardButton{
-			{{Text: MenuCommand}},
+			{
+				{Text: CmdDay},
+				{Text: CmdWeek},
+			},
+			{
+				{Text: CmdHalfDay},
+			},
 		},
 		ResizeKeyboard: true,
 	}
 	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID:      update.Message.Chat.ID,
-		Text:        "Нажмите «Меню» для выбора периода",
+		Text:        "Выберите период",
 		ReplyMarkup: kb,
 	})
 
 	if err != nil {
-		slog.Error("HandleStart", "error", err)
+		slog.ErrorContext(ctx, "HandleStart", "error", err)
 	}
 }
 
-// HandleMenu handles the menu button press and shows period selection.
-func (h *BotHandler) HandleMenu(ctx context.Context, b *bot.Bot, update *models.Update) {
+// HandleWeek handles week-period load graph requests.
+func (h *BotHandler) HandleWeek(ctx context.Context, b BotAPI, update *models.Update) {
 	start := time.Now()
-	defer func() {
-		slog.InfoContext(ctx, "handle menu completed", "duration", time.Since(start))
-	}()
-	kb := &models.InlineKeyboardMarkup{
-		InlineKeyboard: [][]models.InlineKeyboardButton{
-			{
-				{Text: "📅 День", CallbackData: callbackDay},
-				{Text: "📆 Неделя", CallbackData: callbackWeek},
-			},
-			{
-				{Text: "🕒 Полдня", CallbackData: callbackHalfDay},
-			},
-		},
-	}
-
-	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      update.Message.Chat.ID,
-		Text:        "Нужно выбрать период для отображения данных",
-		ReplyMarkup: kb,
-	})
-
-	if err != nil {
-		slog.Error("HandleMenu", "error", err)
-	}
-}
-
-// HandleCallback handles inline keyboard button callbacks for period selection.
-func (h *BotHandler) HandleCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
-	start := time.Now()
-	defer func() {
-		slog.InfoContext(ctx, "handle callback completed", "duration", time.Since(start))
-	}()
-
-	_, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: update.CallbackQuery.ID,
-	})
-
-	if err != nil {
-		slog.Error("answer callback query", "error", err)
-	}
-
-	chatID := update.CallbackQuery.Message.Message.Chat.ID
-	userID := update.CallbackQuery.Message.Message.From.ID
-
-	period := update.CallbackQuery.Data
-	slog.DebugContext(ctx, "callback", "chatID", chatID, "userID", userID, "period", period)
-
-	var (
-		duration     time.Duration
-		predictHours uint8
+	const (
+		predictHours uint8 = 12
+		duration           = 7 * 24 * time.Hour
 	)
+	h.handlePeriod(ctx, b, update, duration, predictHours)
+	slog.InfoContext(ctx, "HandleWeek completed", "duration", time.Since(start))
+}
 
-	switch period {
-	case callbackHalfDay:
-		duration = 12 * time.Hour
-		predictHours = 4
-	case callbackDay:
-		duration = 24 * time.Hour
-		predictHours = 6
-	case callbackWeek:
-		duration = 7 * 24 * time.Hour
-		predictHours = 12
-	default:
-		return
-	}
+// HandleDay handles day period load graph requests.
+func (h *BotHandler) HandleDay(ctx context.Context, b BotAPI, update *models.Update) {
+	start := time.Now()
+	const (
+		predictHours uint8 = 6
+		duration           = 24 * time.Hour
+	)
+	h.handlePeriod(ctx, b, update, duration, predictHours)
+	slog.InfoContext(ctx, "HandleDay completed", "duration", time.Since(start))
+}
 
-	h.buildGraph(ctx, b, chatID, duration, predictHours)
+// HandleHalfDay handles half-day period load graph requests.
+func (h *BotHandler) HandleHalfDay(ctx context.Context, b BotAPI, update *models.Update) {
+	start := time.Now()
+	const (
+		predictHours uint8 = 4
+		duration           = 12 * time.Hour
+	)
+	h.handlePeriod(ctx, b, update, duration, predictHours)
+	slog.InfoContext(ctx, "HandleHalfDay completed", "duration", time.Since(start))
 }
 
 // DefaultHandler handles all other messages, allowing admin users to request custom duration graphs.
-func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
+func (h *BotHandler) DefaultHandler(ctx context.Context, b BotAPI, update *models.Update) {
 	start := time.Now()
 	defer func() {
 		slog.InfoContext(ctx, "default handler completed", "duration", time.Since(start))
 	}()
 
+	if update.Message == nil {
+		slog.WarnContext(ctx, "DefaultHandler: update.Message is nil")
+		return
+	}
+
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	if _, ok := h.cfg.Base.AdminIDs[userID]; !ok {
+	if !h.isAuthorized(userID) {
 		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
 		return
 	}
@@ -160,27 +169,55 @@ func (h *BotHandler) DefaultHandler(ctx context.Context, b *bot.Bot, update *mod
 		return
 	}
 
-	var predictHours uint8
-
-	switch {
-	case duration <= time.Hour:
-		predictHours = 1
-	case duration <= 4*time.Hour:
-		predictHours = 2
-	case duration <= 12*time.Hour:
-		predictHours = 4
-	case duration <= 24*time.Hour:
-		predictHours = 6
-	default:
-		predictHours = 12
-	}
-
+	predictHours := calculatePredictHours(duration)
 	h.buildGraph(ctx, b, chatID, duration, predictHours)
 }
 
-func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, text string) {
+// handlePeriod processes requests for load graphs over a specified duration.
+func (h *BotHandler) handlePeriod(ctx context.Context, b BotAPI, update *models.Update, duration time.Duration, predictHours uint8) {
+	if update.Message == nil || update.Message.From == nil {
+		slog.WarnContext(ctx, "handlePeriod: update.Message or From is nil")
+		return
+	}
+
+	userID := update.Message.From.ID
+	if !h.isAuthorized(userID) {
+		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
+		return
+	}
+
+	chatID := update.Message.Chat.ID
+	text := update.Message.Text
+
+	slog.DebugContext(ctx, "handlePeriod", "chatID", chatID, "userID", userID, "text", text)
+	h.buildGraph(ctx, b, chatID, duration, predictHours)
+}
+
+// isAuthorized checks if the user is authorized to use the bot.
+func (h *BotHandler) isAuthorized(userID int64) bool {
+	_, ok := h.cfg.Base.AdminIDs[userID]
+	return ok
+}
+
+// calculatePredictHours determines the number of prediction hours based on the duration.
+func calculatePredictHours(duration time.Duration) uint8 {
+	switch {
+	case duration <= time.Hour:
+		return 1
+	case duration <= 4*time.Hour:
+		return 2
+	case duration <= 12*time.Hour:
+		return 4
+	case duration <= 24*time.Hour:
+		return 6
+	default:
+		return 12
+	}
+}
+
+func sendErrorMessage(ctx context.Context, err error, b BotAPI, chatID int64, text string) {
 	if err != nil {
-		slog.ErrorContext(ctx, "sending error message", "error", err)
+		slog.ErrorContext(ctx, "error occurred", "error", err, "message", text)
 	}
 
 	_, sendErr := b.SendMessage(ctx, &bot.SendMessageParams{
@@ -189,11 +226,11 @@ func sendErrorMessage(ctx context.Context, err error, b *bot.Bot, chatID int64, 
 	})
 
 	if sendErr != nil {
-		slog.ErrorContext(ctx, "failed to send message", "error", sendErr)
+		slog.ErrorContext(ctx, "failed to send error message", "error", sendErr, "message", text)
 	}
 }
 
-func (h *BotHandler) buildGraph(ctx context.Context, b *bot.Bot, chatID int64, duration time.Duration, ph uint8) {
+func (h *BotHandler) buildGraph(ctx context.Context, b BotAPI, chatID int64, duration time.Duration, ph uint8) {
 	events, err := h.db.GetEvents(ctx, duration)
 	if err != nil {
 		sendErrorMessage(ctx, err, b, chatID, "Не удалось получить данные за указанный период")
