@@ -38,13 +38,13 @@ type Prediction struct {
 // Predictor holds the statistics and provides methods to update and retrieve predictions.
 type Predictor struct {
 	stats               [dayTypesCount][hoursInDay]*HourlyStats
-	recentEvents        []databaser.Event
 	holidayChecker      HolidayChecker
-	mu                  sync.RWMutex
+	recentEvents        []databaser.Event
 	decayLambda         float64
 	minWeight           float64
 	confidenceThreshold float64
 	maxRecentCount      int
+	mu                  sync.RWMutex
 }
 
 // New creates a new Predictor instance with the provided HolidayChecker.
@@ -192,7 +192,7 @@ func (p *Predictor) getDayType(t time.Time) DayType {
 	if p.holidayChecker != nil && p.holidayChecker.IsHoliday(t) {
 		return Holiday
 	}
-	//nolint:gosec // G115: Weekday() returns 0-6, always fits in uint8
+	// #nosec G115 -- Weekday() returns 0-6, always fits in uint8
 	return DayType(t.Weekday())
 }
 
@@ -266,7 +266,7 @@ func (p *Predictor) predictWithBlending(targetTime time.Time, hour int) float64 
 	isHoliday := p.holidayChecker != nil && p.holidayChecker.IsHoliday(targetTime)
 
 	if !isHoliday {
-		//nolint:gosec // G115: Weekday() returns 0-6, always fits in uint8
+		// #nosec G115 -- Weekday() returns 0-6, always fits in uint8
 		dayType := DayType(targetTime.Weekday())
 		return p.getWeightedAverage(dayType, hour)
 	}
