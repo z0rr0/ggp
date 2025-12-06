@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -13,6 +14,13 @@ import (
 	"time"
 
 	"github.com/z0rr0/ggp/databaser"
+)
+
+const (
+	// maxResponseSize limits response body to 1MB to prevent memory exhaustion.
+	maxResponseSize = 1 << 20
+	// maxLoadPercent is the maximum valid load percentage.
+	maxLoadPercent uint64 = 100
 )
 
 // Club represents the JSON structure of the club data returned by the API.
@@ -116,6 +124,11 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 		return 0, fmt.Errorf("do request: %w", err)
 	}
 	defer func() {
+		// drain remaining body to allow connection reuse
+		if _, errCopy := io.Copy(io.Discard, resp.Body); errCopy != nil {
+			slog.Error("drain body error", "error", errCopy)
+		}
+
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			slog.Error("close body error", "error", closeErr)
 		}
@@ -125,8 +138,13 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	club := new(Club)
-	dec := json.NewDecoder(resp.Body)
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		return 0, fmt.Errorf("unexpected content-type: %s", ct)
+	}
+
+	var club Club
+	dec := json.NewDecoder(io.LimitReader(resp.Body, maxResponseSize))
 
 	if err = dec.Decode(&club); err != nil {
 		return 0, fmt.Errorf("decode JSON: %w", err)
@@ -139,6 +157,10 @@ func (f *Fetcher) getLoad(ctx context.Context) (uint8, error) {
 	p, err := strconv.ParseUint(strings.TrimRight(club.CurrentLoad, "%"), 10, 8)
 	if err != nil {
 		return 0, fmt.Errorf("parse currentLoad=%q: %w", club.CurrentLoad, err)
+	}
+
+	if p > maxLoadPercent {
+		return 0, fmt.Errorf("load %d exceeds maximum %d%%", p, maxLoadPercent)
 	}
 
 	return uint8(p), nil
