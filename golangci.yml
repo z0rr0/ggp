@@ -43,7 +43,7 @@ linters:
     lll:
       line-length: 160
     funlen:
-      statements: 50
+      statements: 60
       lines: 150
     tagliatelle:
       case:

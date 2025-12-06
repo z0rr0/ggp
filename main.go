@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,14 +27,14 @@ import (
 )
 
 var (
-	// Version is a git version
-	Version = "v0.0.0"
-	// Revision is a revision number
-	Revision = "git:0000000"
-	// BuildDate is a build date
-	BuildDate = "1970-01-01T00:00:00"
-	// GoVersion is a runtime Go language version
-	GoVersion = runtime.Version() // "go1.00.0"
+	// Version is a git version.
+	Version = "v0.0.0" //nolint:gochecknoglobals
+	// Revision is a revision number.
+	Revision = "git:0000000" //nolint:gochecknoglobals
+	// BuildDate is a build date.
+	BuildDate = "1970-01-01T00:00:00" //nolint:gochecknoglobals
+	// GoVersion is a runtime Go language version.
+	GoVersion = runtime.Version() //nolint:gochecknoglobals
 )
 
 func main() {
@@ -61,7 +60,8 @@ func main() {
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		log.Fatalf("failed to load config: %v", err)
+		slog.Error("failed to load config", "error", err)
+		return
 	}
 
 	// init slog logger
@@ -77,7 +77,8 @@ func main() {
 
 	db, err := databaser.New(dbCtx, cfg.Database.Path)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		slog.Error("failed to open database", "error", err)
+		return
 	}
 	defer func() {
 		if dbErr := db.Close(); dbErr != nil {
@@ -145,7 +146,7 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, p
 	botHandler := watcher.NewBotHandler(db, cfg, pc)
 	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(botHandler.DefaultHandler))
 	if err != nil {
-		return fmt.Errorf("failed to create bot: %v", err)
+		return fmt.Errorf("failed to create bot: %w", err)
 	}
 
 	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.StartCommand, bot.MatchTypeExact, botHandler.HandleStart)
@@ -218,7 +219,7 @@ func runPredictor(ctx context.Context, cfg *config.Config, db *databaser.DB, eve
 
 	controller, err := predictor.Run(ctx, db, eventCh, cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start predictor controller: %v", err)
+		return nil, nil, fmt.Errorf("failed to start predictor controller: %w", err)
 	}
 
 	return controller, controller.Run(ctx), nil

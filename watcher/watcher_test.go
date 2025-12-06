@@ -45,15 +45,15 @@ func newTestConfig(t *testing.T, adminIDs map[int64]struct{}) *config.Config {
 
 // mockBot implements a minimal mock for testing bot interactions.
 type mockBot struct {
-	mu             sync.Mutex
-	sentMessages   []bot.SendMessageParams
-	sentPhotos     []bot.SendPhotoParams
-	answeredCBs    []bot.AnswerCallbackQueryParams
-	sendMsgErr     error
-	sendPhotoErr   error
-	answerCBErr    error
-	sendMsgResult  *models.Message
-	sendPhotoMsg   *models.Message
+	mu            sync.Mutex
+	sentMessages  []bot.SendMessageParams
+	sentPhotos    []bot.SendPhotoParams
+	answeredCBs   []bot.AnswerCallbackQueryParams
+	sendMsgErr    error
+	sendPhotoErr  error
+	answerCBErr   error
+	sendMsgResult *models.Message
+	sendPhotoMsg  *models.Message
 }
 
 func (m *mockBot) SendMessage(_ context.Context, params *bot.SendMessageParams) (*models.Message, error) {
