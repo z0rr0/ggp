@@ -271,11 +271,6 @@ func (h *BotHandler) DefaultHandler(ctx context.Context, b BotAPI, update *model
 // handlePeriod processes requests for load graphs over a specified duration.
 func (h *BotHandler) handlePeriod(ctx context.Context, b BotAPI, update *models.Update, duration time.Duration, predictHours uint8) {
 	userID := update.Message.From.ID
-	if !h.isAdmin(userID) {
-		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
-		return
-	}
-
 	chatID := update.Message.Chat.ID
 	text := update.Message.Text
 

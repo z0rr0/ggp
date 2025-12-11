@@ -344,7 +344,7 @@ func TestHandlePeriod(t *testing.T) {
 		wantPhotoCalls int
 	}{
 		{
-			name: "authorized user",
+			name: "success",
 			update: &models.Update{
 				Message: &models.Message{
 					Chat: models.Chat{ID: 123},
@@ -353,17 +353,6 @@ func TestHandlePeriod(t *testing.T) {
 				},
 			},
 			wantPhotoCalls: 1,
-		},
-		{
-			name: "unauthorized user",
-			update: &models.Update{
-				Message: &models.Message{
-					Chat: models.Chat{ID: 123},
-					From: &models.User{ID: 999},
-					Text: "test",
-				},
-			},
-			wantPhotoCalls: 0,
 		},
 	}
 
