@@ -94,7 +94,7 @@ func BotAuthMiddleware(adminUserIDs map[int64]struct{}, db *databaser.DB) func(n
 
 // generateRequestID generates a new request ID.
 func generateRequestID() uint64 {
-	return rand.Uint64()
+	return rand.Uint64() // #nosec G404 // cryptographically insecure is fine here
 }
 
 // emptyUpdate checks if the update is empty or invalid.
