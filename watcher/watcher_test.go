@@ -141,12 +141,6 @@ func TestHandleStart(t *testing.T) {
 			},
 			wantCalls: 1,
 		},
-		{
-			name:          "nil message",
-			update:        &models.Update{},
-			wantCalls:     0,
-			expectWarning: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -371,23 +365,6 @@ func TestHandlePeriod(t *testing.T) {
 			},
 			wantPhotoCalls: 0,
 		},
-		{
-			name: "nil message",
-			update: &models.Update{
-				Message: nil,
-			},
-			wantPhotoCalls: 0,
-		},
-		{
-			name: "nil from",
-			update: &models.Update{
-				Message: &models.Message{
-					Chat: models.Chat{ID: 123},
-					From: nil,
-				},
-			},
-			wantPhotoCalls: 0,
-		},
 	}
 
 	for _, tt := range tests {
@@ -442,9 +419,9 @@ func TestIsAuthorized(t *testing.T) {
 			cfg := newTestConfig(tt.adminIDs...)
 			handler := NewBotHandler(db, cfg, nil)
 
-			got := handler.isAuthorized(tt.userID)
+			got := handler.isAdmin(tt.userID)
 			if got != tt.want {
-				t.Errorf("isAuthorized(%d) = %v, want %v", tt.userID, got, tt.want)
+				t.Errorf("isAdmin(%d) = %v, want %v", tt.userID, got, tt.want)
 			}
 		})
 	}

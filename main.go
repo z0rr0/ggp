@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -149,10 +150,31 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, p
 		return fmt.Errorf("failed to create bot: %w", err)
 	}
 
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStart, bot.MatchTypeExact, botHandler.WrapHandleStart)
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdWeek, bot.MatchTypeExact, botHandler.WrapHandleWeek)
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdDay, bot.MatchTypeExact, botHandler.WrapHandleDay)
-	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdHalfDay, bot.MatchTypeExact, botHandler.WrapHandleHalfDay)
+	ok, err := b.SetMyCommands(ctx, &bot.SetMyCommandsParams{Commands: watcher.Commands})
+	if err != nil {
+		return fmt.Errorf("failed to set bot commands: %w", err)
+	}
+	if !ok {
+		return errors.New("bot commands are not set")
+	}
+
+	var (
+		mwLog   bot.Middleware = watcher.BotLoggingMiddleware
+		mwAuth  bot.Middleware = watcher.BotAuthMiddleware(cfg.Base.AdminIDs, db)
+		mwAdmin bot.Middleware = watcher.BotAdminOnlyMiddleware(cfg.Base.AdminIDs)
+	)
+
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStart, bot.MatchTypeCommand, botHandler.WrapHandleStart, mwLog)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStop, bot.MatchTypeCommand, botHandler.WrapHandleStop, mwLog, mwAuth)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdID, bot.MatchTypeCommand, botHandler.WrapHandleID, mwLog, mwAuth)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdWeek, bot.MatchTypeCommand, botHandler.WrapHandleWeek, mwLog, mwAuth)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdDay, bot.MatchTypeCommand, botHandler.WrapHandleDay, mwLog, mwAuth)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdHalfDay, bot.MatchTypeCommand, botHandler.WrapHandleHalfDay, mwLog, mwAuth)
+
+	// admin handlers
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdUsers, bot.MatchTypeCommand, botHandler.WrapHandleUsers, mwLog, mwAdmin)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdApprove, bot.MatchTypeCommand, botHandler.WrapHandleApprove, mwLog, mwAdmin)
+	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdReject, bot.MatchTypeCommand, botHandler.WrapHandleReject, mwLog, mwAdmin)
 
 	slog.Info("bot is starting")
 	b.Start(ctx)

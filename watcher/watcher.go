@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/jmoiron/sqlx"
 
 	"github.com/z0rr0/ggp/config"
 	"github.com/z0rr0/ggp/databaser"
@@ -25,26 +26,59 @@ type BotAPI interface {
 
 // Telegram bot command constants.
 const (
-	CmdStart   = "/start"
-	CmdWeek    = "📆 Неделя"
-	CmdDay     = "📅 День"
-	CmdHalfDay = "🕒 Полдня"
+	CmdStart   = "start"
+	CmdStop    = "stop"
+	CmdID      = "id"
+	CmdWeek    = "week"
+	CmdDay     = "day"
+	CmdHalfDay = "halfday"
 )
 
 const (
 	dateTimeFormat = "02.01.2006 15:04"
 )
 
+var (
+	// Commands defines the list of Telegram bot commands.
+	Commands = []models.BotCommand{ //nolint:gochecknoglobals
+		{
+			Command:     CmdStart,
+			Description: "Начать работу с ботом 🤖",
+		},
+		{
+			Command:     CmdStop,
+			Description: "Остановить работу с ботом 🛑",
+		},
+		{
+			Command:     CmdHalfDay,
+			Description: "Показать график за полдня 🕒",
+		},
+		{
+			Command:     CmdDay,
+			Description: "Показать график за день 📅",
+		},
+		{
+			Command:     CmdWeek,
+			Description: "Показать график за неделю 📆",
+		},
+		{
+			Command:     CmdID,
+			Description: "Показать ваш Telegram ID 🪪",
+		},
+	}
+)
+
 // BotHandler handles Telegram bot interactions for displaying load graphs.
 type BotHandler struct {
-	db  *databaser.DB
-	cfg *config.Config
-	pc  *predictor.Controller
+	db       *databaser.DB
+	cfg      *config.Config
+	pc       *predictor.Controller
+	adminIDs map[int64]struct{}
 }
 
 // NewBotHandler creates a new BotHandler with the given dependencies.
 func NewBotHandler(db *databaser.DB, cfg *config.Config, pc *predictor.Controller) *BotHandler {
-	return &BotHandler{db: db, cfg: cfg, pc: pc}
+	return &BotHandler{db: db, cfg: cfg, pc: pc, adminIDs: cfg.Base.AdminIDs}
 }
 
 // Wrapper methods for bot.HandlerFunc compatibility
@@ -52,6 +86,11 @@ func NewBotHandler(db *databaser.DB, cfg *config.Config, pc *predictor.Controlle
 // WrapHandleStart wraps HandleStart for bot.HandlerFunc compatibility.
 func (h *BotHandler) WrapHandleStart(ctx context.Context, b *bot.Bot, update *models.Update) {
 	h.HandleStart(ctx, b, update)
+}
+
+// WrapHandleStop wraps HandleStop for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleStop(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleStop(ctx, b, update)
 }
 
 // WrapHandleWeek wraps HandleWeek for bot.HandlerFunc compatibility.
@@ -69,6 +108,11 @@ func (h *BotHandler) WrapHandleHalfDay(ctx context.Context, b *bot.Bot, update *
 	h.HandleHalfDay(ctx, b, update)
 }
 
+// WrapHandleID wraps HandleID for bot.HandlerFunc compatibility.
+func (h *BotHandler) WrapHandleID(ctx context.Context, b *bot.Bot, update *models.Update) {
+	h.HandleID(ctx, b, update)
+}
+
 // WrapDefaultHandler wraps DefaultHandler for bot.HandlerFunc compatibility.
 func (h *BotHandler) WrapDefaultHandler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	h.DefaultHandler(ctx, b, update)
@@ -76,88 +120,139 @@ func (h *BotHandler) WrapDefaultHandler(ctx context.Context, b *bot.Bot, update 
 
 // HandleStart handles the /start command and shows the main keyboard.
 func (h *BotHandler) HandleStart(ctx context.Context, b BotAPI, update *models.Update) {
-	start := time.Now()
-	defer func() {
-		slog.InfoContext(ctx, "handle start completed", "duration", time.Since(start))
-	}()
-
-	if update.Message == nil {
-		slog.WarnContext(ctx, "HandleStart: update.Message is nil")
+	if _, ok := h.adminIDs[update.Message.From.ID]; ok {
+		sendErrorMessage(ctx, nil, b, update.Message.Chat.ID, "Вы являетесь администратором бота.")
 		return
 	}
 
-	kb := &models.ReplyKeyboardMarkup{
-		Keyboard: [][]models.KeyboardButton{
-			{
-				{Text: CmdDay},
-				{Text: CmdWeek},
-			},
-			{
-				{Text: CmdHalfDay},
-			},
-		},
-		ResizeKeyboard: true,
+	userFrom := update.Message.From
+	var user *databaser.User
+
+	tnxErr := databaser.InTransaction(ctx, h.db, func(tx *sqlx.Tx) error {
+		dbUser, err := databaser.GetOrCreateUser(ctx, tx, userFrom.ID, userFrom.Username, userFrom.FirstName, userFrom.LastName)
+		if err != nil {
+			return err
+		}
+
+		user = dbUser
+		return nil
+	})
+
+	if tnxErr != nil {
+		slog.ErrorContext(ctx, "HandleStart get or create user", "error", tnxErr)
+		sendErrorMessage(ctx, tnxErr, b, update.Message.Chat.ID, "Не удалось обработать ваш запрос")
+		return
 	}
+
+	var text string
+
+	switch {
+	case user.IsPending():
+		text = "Ваш запрос принят, дождитесь подтверждения."
+	case user.IsApproved():
+		text = "Бот уже активен. Используйте команды для получения графиков."
+	default:
+		text = "Ваш запрос отклонён."
+	}
+
 	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID:      update.Message.Chat.ID,
-		Text:        "Выберите период",
-		ReplyMarkup: kb,
+		ChatID: update.Message.Chat.ID,
+		Text:   text,
 	})
 
 	if err != nil {
 		slog.ErrorContext(ctx, "HandleStart", "error", err)
 	}
+
+	// notify admins about new users
+	adminText := fmt.Sprintf(
+		"Пользователь запросил доступ (статус=%d):\nID: %d\n@%s %s %s",
+		user.Status,
+		user.ID,
+		user.Username,
+		user.FirstName,
+		user.LastName,
+	)
+	for adminID := range h.adminIDs {
+		_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: adminID,
+			Text:   adminText,
+		})
+
+		if err != nil {
+			slog.ErrorContext(ctx, "HandleStart notify admin", "adminID", adminID, "userID", user.ID, "error", err)
+		}
+	}
+}
+
+// HandleStop handles the /stop command and removes the main keyboard.
+func (h *BotHandler) HandleStop(ctx context.Context, b BotAPI, update *models.Update) {
+	err := h.db.DeleteUser(ctx, update.Message.From.ID)
+	if err != nil {
+		sendErrorMessage(ctx, err, b, update.Message.Chat.ID, "Не удалось обработать ваш запрос")
+		return
+	}
+
+	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: update.Message.Chat.ID,
+		Text:   "Бот остановлен. Чтобы начать снова, используйте команду /start.",
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "HandleStop", "error", err)
+	}
 }
 
 // HandleWeek handles week-period load graph requests.
 func (h *BotHandler) HandleWeek(ctx context.Context, b BotAPI, update *models.Update) {
-	start := time.Now()
 	const (
 		predictHours uint8 = 12
 		duration           = 7 * 24 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
-	slog.InfoContext(ctx, "HandleWeek completed", "duration", time.Since(start))
 }
 
 // HandleDay handles day period load graph requests.
 func (h *BotHandler) HandleDay(ctx context.Context, b BotAPI, update *models.Update) {
-	start := time.Now()
 	const (
 		predictHours uint8 = 6
 		duration           = 24 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
-	slog.InfoContext(ctx, "HandleDay completed", "duration", time.Since(start))
 }
 
 // HandleHalfDay handles half-day period load graph requests.
 func (h *BotHandler) HandleHalfDay(ctx context.Context, b BotAPI, update *models.Update) {
-	start := time.Now()
 	const (
 		predictHours uint8 = 4
 		duration           = 12 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
-	slog.InfoContext(ctx, "HandleHalfDay completed", "duration", time.Since(start))
+}
+
+// HandleID handles the /id command and returns the user's Telegram ID.
+func (h *BotHandler) HandleID(ctx context.Context, b BotAPI, update *models.Update) {
+	userID := update.Message.From.ID
+	_, err := b.SendMessage(ctx, &bot.SendMessageParams{
+		ChatID: update.Message.Chat.ID,
+		Text:   fmt.Sprintf("ID: %d", userID),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "HandleID", "error", err)
+	}
 }
 
 // DefaultHandler handles all other messages, allowing admin users to request custom duration graphs.
 func (h *BotHandler) DefaultHandler(ctx context.Context, b BotAPI, update *models.Update) {
-	start := time.Now()
-	defer func() {
-		slog.InfoContext(ctx, "default handler completed", "duration", time.Since(start))
-	}()
-
-	if update.Message == nil {
-		slog.WarnContext(ctx, "DefaultHandler: update.Message is nil")
+	if emptyUpdate(update) {
+		slog.WarnContext(ctx, "default handler: update is nil")
 		return
 	}
 
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	if !h.isAuthorized(userID) {
+	if !h.isAdmin(userID) {
 		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
 		return
 	}
@@ -175,13 +270,8 @@ func (h *BotHandler) DefaultHandler(ctx context.Context, b BotAPI, update *model
 
 // handlePeriod processes requests for load graphs over a specified duration.
 func (h *BotHandler) handlePeriod(ctx context.Context, b BotAPI, update *models.Update, duration time.Duration, predictHours uint8) {
-	if update.Message == nil || update.Message.From == nil {
-		slog.WarnContext(ctx, "handlePeriod: update.Message or From is nil")
-		return
-	}
-
 	userID := update.Message.From.ID
-	if !h.isAuthorized(userID) {
+	if !h.isAdmin(userID) {
 		slog.WarnContext(ctx, "unauthorized user", "userID", userID)
 		return
 	}
@@ -193,9 +283,9 @@ func (h *BotHandler) handlePeriod(ctx context.Context, b BotAPI, update *models.
 	h.buildGraph(ctx, b, chatID, duration, predictHours)
 }
 
-// isAuthorized checks if the user is authorized to use the bot.
-func (h *BotHandler) isAuthorized(userID int64) bool {
-	_, ok := h.cfg.Base.AdminIDs[userID]
+// isAdmin checks if the user is authorized to use the bot.
+func (h *BotHandler) isAdmin(userID int64) bool {
+	_, ok := h.adminIDs[userID]
 	return ok
 }
 
@@ -230,6 +320,7 @@ func sendErrorMessage(ctx context.Context, err error, b BotAPI, chatID int64, te
 	}
 }
 
+// buildGraph constructs and sends the load graph to the user.
 func (h *BotHandler) buildGraph(ctx context.Context, b BotAPI, chatID int64, duration time.Duration, ph uint8) {
 	events, err := h.db.GetEvents(ctx, duration)
 	if err != nil {
