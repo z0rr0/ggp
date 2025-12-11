@@ -41,14 +41,10 @@ const (
 var (
 	// Commands defines the list of Telegram bot commands.
 	Commands = []models.BotCommand{ //nolint:gochecknoglobals
-		{
-			Command:     CmdStart,
-			Description: "Начать работу с ботом 🤖",
-		},
-		{
-			Command:     CmdStop,
-			Description: "Остановить работу с ботом 🛑",
-		},
+		// {
+		//	Command:     CmdStart,
+		//	Description: "Начать работу с ботом 🤖",
+		// },
 		{
 			Command:     CmdHalfDay,
 			Description: "Показать график за полдня 🕒",
@@ -62,9 +58,13 @@ var (
 			Description: "Показать график за неделю 📆",
 		},
 		{
-			Command:     CmdID,
-			Description: "Показать ваш Telegram ID 🪪",
+			Command:     CmdStop,
+			Description: "Остановить работу с ботом 🛑",
 		},
+		// {
+		//	Command:     CmdID,
+		//	Description: "Показать ваш Telegram ID 🪪",
+		// },
 	}
 )
 
