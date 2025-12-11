@@ -15,6 +15,8 @@ A Telegram bot that tracks gym occupancy, predicts future load using statistical
 - CSV data import support
 - Admin-only features via configuration
 
+![schema](docs/img.png)
+
 ## Requirements
 
 - Go 1.25 or later
@@ -36,43 +38,13 @@ go build -o ggp .
 
 ## Configuration
 
-Create a configuration file based on the example:
+Create a configuration file based on the example [config.example.toml](config.example.toml)
 
 ```bash
 cp config.example.toml config.toml
 ```
 
-Edit `config.toml` with your settings:
-
-```toml
-[base]
-timezone = "Europe/London"
-admins = [123456789]  # Telegram user IDs
-debug = false
-
-[database]
-path = "ggp.sqlite"
-query_timeout = 5
-
-[fetcher]
-active = true
-period = 300  # seconds
-token = "your_api_token"
-url = "https://api.example.com/load"
-
-[holidayer]
-active = true
-period = 86400  # 1 day
-url = "https://calendar.example.com/<YEAR>"
-
-[predictor]
-active = true
-hours = 4  # prediction horizon (1-24)
-
-[telegram]
-active = true
-token = "YOUR_TELEGRAM_BOT_TOKEN"
-```
+Edit `config.toml` with your settings.
 
 ## Usage
 
@@ -91,14 +63,13 @@ Import historical data from CSV:
 ```bash
 make test       # Run tests with race detector
 make lint       # Run all linters
-make precommit  # Full check before committing
 ```
 
 ## Docker
 
 ```bash
 make docker
-docker-compose up
+docker-compose up -d
 ```
 
 ## Dependencies

@@ -206,7 +206,7 @@ func (h *BotHandler) HandleStop(ctx context.Context, b BotAPI, update *models.Up
 // HandleWeek handles week-period load graph requests.
 func (h *BotHandler) HandleWeek(ctx context.Context, b BotAPI, update *models.Update) {
 	const (
-		predictHours uint8 = 12
+		predictHours uint8 = 48
 		duration           = 7 * 24 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
@@ -215,7 +215,7 @@ func (h *BotHandler) HandleWeek(ctx context.Context, b BotAPI, update *models.Up
 // HandleDay handles day period load graph requests.
 func (h *BotHandler) HandleDay(ctx context.Context, b BotAPI, update *models.Update) {
 	const (
-		predictHours uint8 = 6
+		predictHours uint8 = 24
 		duration           = 24 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
@@ -224,7 +224,7 @@ func (h *BotHandler) HandleDay(ctx context.Context, b BotAPI, update *models.Upd
 // HandleHalfDay handles half-day period load graph requests.
 func (h *BotHandler) HandleHalfDay(ctx context.Context, b BotAPI, update *models.Update) {
 	const (
-		predictHours uint8 = 4
+		predictHours uint8 = 16
 		duration           = 12 * time.Hour
 	)
 	h.handlePeriod(ctx, b, update, duration, predictHours)
