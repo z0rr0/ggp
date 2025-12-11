@@ -12,25 +12,6 @@ import (
 	"github.com/z0rr0/ggp/databaser"
 )
 
-func TestGenerateRequestID(t *testing.T) {
-	id1 := generateRequestID()
-	if id1 == "" {
-		t.Error("generateRequestID() returned empty string")
-	}
-
-	// Should be hex encoded, so length = 2 * requestIDLen
-	expectedLen := 2 * requestIDLen
-	if len(id1) != expectedLen {
-		t.Errorf("generateRequestID() length = %d, want %d", len(id1), expectedLen)
-	}
-
-	// IDs should be unique
-	id2 := generateRequestID()
-	if id1 == id2 {
-		t.Error("generateRequestID() returned same ID twice")
-	}
-}
-
 func TestBotLoggingMiddleware(t *testing.T) {
 	var called bool
 	next := func(_ context.Context, _ *bot.Bot, _ *models.Update) {

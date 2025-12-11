@@ -143,9 +143,14 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, p
 		slog.Info("telegram bot is inactive")
 		return nil
 	}
+	var (
+		mwLog   bot.Middleware = watcher.BotLoggingMiddleware
+		mwAuth  bot.Middleware = watcher.BotAuthMiddleware(cfg.Base.AdminIDs, db)
+		mwAdmin bot.Middleware = watcher.BotAdminOnlyMiddleware(cfg.Base.AdminIDs)
+	)
 
 	botHandler := watcher.NewBotHandler(db, cfg, pc)
-	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(botHandler.WrapDefaultHandler))
+	b, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(mwLog(botHandler.WrapDefaultHandler)))
 	if err != nil {
 		return fmt.Errorf("failed to create bot: %w", err)
 	}
@@ -157,12 +162,6 @@ func runTelegramBot(ctx context.Context, cfg *config.Config, db *databaser.DB, p
 	if !ok {
 		return errors.New("bot commands are not set")
 	}
-
-	var (
-		mwLog   bot.Middleware = watcher.BotLoggingMiddleware
-		mwAuth  bot.Middleware = watcher.BotAuthMiddleware(cfg.Base.AdminIDs, db)
-		mwAdmin bot.Middleware = watcher.BotAdminOnlyMiddleware(cfg.Base.AdminIDs)
-	)
 
 	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStart, bot.MatchTypeCommand, botHandler.WrapHandleStart, mwLog)
 	b.RegisterHandler(bot.HandlerTypeMessageText, watcher.CmdStop, bot.MatchTypeCommand, botHandler.WrapHandleStop, mwLog, mwAuth)

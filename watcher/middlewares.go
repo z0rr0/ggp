@@ -2,22 +2,14 @@ package watcher
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"io"
 	"log/slog"
-	"strconv"
+	"math/rand/v2"
 	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 
 	"github.com/z0rr0/ggp/databaser"
-)
-
-const (
-	// requestIDLen is a length of generated request ID in bytes.
-	requestIDLen = 16
 )
 
 // BotLoggingMiddleware is a middleware that logs the start and stop of each request.
@@ -101,16 +93,8 @@ func BotAuthMiddleware(adminUserIDs map[int64]struct{}, db *databaser.DB) func(n
 }
 
 // generateRequestID generates a new request ID.
-func generateRequestID() string {
-	bytes := make([]byte, requestIDLen)
-	_, err := io.ReadFull(rand.Reader, bytes)
-
-	if err != nil {
-		slog.Warn("failed to generate request ID", "error", err)
-		return strconv.FormatInt(time.Now().UnixNano(), 16)
-	}
-
-	return hex.EncodeToString(bytes)
+func generateRequestID() uint64 {
+	return rand.Uint64()
 }
 
 // emptyUpdate checks if the update is empty or invalid.
