@@ -15,7 +15,7 @@ A Telegram bot that tracks gym occupancy, predicts future load using statistical
 - CSV data import support
 - Admin-only features via configuration
 
-![schema](docs/img.png)
+![schema](docs/image.png)
 
 ## Requirements
 
