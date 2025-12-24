@@ -12,7 +12,7 @@ import (
 func setupTestDB(t *testing.T, ctx context.Context) *databaser.DB {
 	t.Helper()
 
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}

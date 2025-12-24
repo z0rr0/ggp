@@ -36,7 +36,7 @@ func TestDayType(t *testing.T) {
 
 func TestNewRussianHolidayChecker(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestNewRussianHolidayChecker(t *testing.T) {
 
 func TestNewRussianHolidayChecker_WithHolidays(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestNewRussianHolidayChecker_WithHolidays(t *testing.T) {
 
 func TestRussianHolidayChecker_IsHoliday(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestRussianHolidayChecker_IsHoliday(t *testing.T) {
 
 func TestRussianHolidayChecker_HolidayTitle(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestMonthDay(t *testing.T) {
 
 func TestRussianHolidayChecker_MultipleYears(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestRussianHolidayChecker_MultipleYears(t *testing.T) {
 
 func TestRussianHolidayChecker_EmptyDatabase(t *testing.T) {
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}

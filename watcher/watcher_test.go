@@ -42,7 +42,7 @@ func (m *mockBot) SendPhoto(_ context.Context, params *bot.SendPhotoParams) (*mo
 func newTestDB(t *testing.T) *databaser.DB {
 	t.Helper()
 	ctx := context.Background()
-	db, err := databaser.New(ctx, ":memory:")
+	db, err := databaser.New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}

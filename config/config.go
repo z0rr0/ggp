@@ -36,6 +36,7 @@ type Database struct {
 	Path         string        `toml:"path"`
 	Timeout      time.Duration `toml:"-"`
 	QueryTimeout int           `toml:"query_timeout"`
+	Threads      uint8         `toml:"threads"`
 }
 
 // Fetcher contains fetcher configuration.
@@ -146,6 +147,9 @@ func (d *Database) validate() error {
 		return errors.New("query_timeout must be greater than zero")
 	}
 	d.Timeout = time.Duration(d.QueryTimeout) * time.Second
+	if d.Threads == 0 {
+		d.Threads = 1
+	}
 	return nil
 }
 

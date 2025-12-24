@@ -22,18 +22,24 @@ type DB struct {
 }
 
 // New creates a new database connection.
-func New(ctx context.Context, path string) (*DB, error) {
+func New(ctx context.Context, path string, threads uint8) (*DB, error) {
 	db, err := sqlx.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	if threads == 0 {
+		return nil, errors.New("threads must be greater than 0")
+	}
 
 	pragmas := []string{
-		"PRAGMA journal_mode=WAL",   // write-ahead logging
-		"PRAGMA synchronous=NORMAL", // balance between performance and safety
-		"PRAGMA cache_size=-32000",  // 32 mb cache
-		"PRAGMA busy_timeout=5000",  // 5 sec busy timeout
-		"PRAGMA foreign_keys=ON",    // enable foreign key constraints
+		"PRAGMA journal_mode=WAL",    // write-ahead logging
+		"PRAGMA synchronous=NORMAL",  // balance between performance and safety
+		"PRAGMA cache_size=-32768",   // 32 mb cache (hegative value means size in KB)
+		"PRAGMA mmap_size=134217728", // 128 mb mmap
+		"PRAGMA temp_store=MEMORY",   // store temporary tables in memory
+		"PRAGMA busy_timeout=5000",   // 5 sec busy timeout
+		"PRAGMA foreign_keys=ON",     // enable foreign key constraints
+		fmt.Sprintf("PRAGMA threads=%d", threads),
 	}
 
 	for _, pragma := range pragmas {

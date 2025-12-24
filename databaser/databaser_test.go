@@ -12,7 +12,7 @@ import (
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
 	ctx := context.Background()
-	db, err := New(ctx, ":memory:")
+	db, err := New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("failed to create test database: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			db, err := New(ctx, tt.path)
+			db, err := New(ctx, tt.path, 1)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -998,7 +998,7 @@ func TestHoliday_LogValue(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	ctx := context.Background()
-	db, err := New(ctx, ":memory:")
+	db, err := New(ctx, ":memory:", 1)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

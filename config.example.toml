@@ -6,6 +6,7 @@ debug = false
 [database]
 path = "ggp.sqlite"
 query_timeout = 5  # in seconds
+threads = 1  # number of database threads
 
 [fetcher]
 active = true

@@ -76,7 +76,7 @@ func main() {
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), cfg.Database.Timeout)
 	defer dbCancel()
 
-	db, err := databaser.New(dbCtx, cfg.Database.Path)
+	db, err := databaser.New(dbCtx, cfg.Database.Path, cfg.Database.Threads)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
 		return
