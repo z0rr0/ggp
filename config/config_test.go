@@ -49,6 +49,8 @@ url = "https://calendar.example.com/holidays"
 [predictor]
 active = true
 hours = 4
+load_size = 50
+query_timeout = 10
 
 [telegram]
 active = true
@@ -387,21 +389,40 @@ func TestPredictor_Validate(t *testing.T) {
 		},
 		{
 			name:      "hours zero",
-			predictor: Predictor{Active: true, Hours: 0},
+			predictor: Predictor{Active: true, Hours: 0, LoadSize: 100, QueryTimeout: 10},
 			wantErr:   true,
 		},
 		{
 			name:      "hours above 24",
-			predictor: Predictor{Active: true, Hours: 25},
+			predictor: Predictor{Active: true, Hours: 25, LoadSize: 100, QueryTimeout: 10},
 			wantErr:   true,
 		},
 		{
 			name:      "hours min boundary",
-			predictor: Predictor{Active: true, Hours: 1},
+			predictor: Predictor{Active: true, Hours: 1, LoadSize: 100, QueryTimeout: 10},
 		},
 		{
 			name:      "hours max boundary",
-			predictor: Predictor{Active: true, Hours: 24},
+			predictor: Predictor{Active: true, Hours: 24, LoadSize: 100, QueryTimeout: 10},
+		},
+		{
+			name: "load size zero",
+			predictor: Predictor{
+				Active:   true,
+				Hours:    4,
+				LoadSize: 0,
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero query timeout",
+			predictor: Predictor{
+				Active:       true,
+				Hours:        4,
+				LoadSize:     100,
+				QueryTimeout: 0,
+			},
+			wantErr: true,
 		},
 	}
 

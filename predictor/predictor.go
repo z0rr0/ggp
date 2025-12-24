@@ -71,29 +71,16 @@ func New(holidayChecker HolidayChecker) *Predictor {
 func (p *Predictor) AddEvent(event databaser.Event) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.addEvent(event)
+}
 
-	dayType := p.getDayType(event.Timestamp)
-	hour := event.Timestamp.Hour()
-	stats := p.stats[dayType][hour]
+// AddEvents adds multiple events to the predictor and updates the statistics.
+func (p *Predictor) AddEvents(events []databaser.Event) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if !stats.LastUpdate.IsZero() {
-		daysSinceUpdate := event.Timestamp.Sub(stats.LastUpdate).Hours() / hoursInDay
-		if daysSinceUpdate > 0 {
-			decayFactor := math.Exp(-p.decayLambda * daysSinceUpdate)
-			stats.WeightedSum *= decayFactor
-			stats.TotalWeight *= decayFactor
-		}
-	}
-
-	stats.WeightedSum += event.FloatLoad()
-	stats.TotalWeight += 1.0
-	stats.Count++
-	stats.LastUpdate = event.Timestamp
-
-	p.recentEvents = append(p.recentEvents, event)
-	if len(p.recentEvents) > p.maxRecentCount {
-		copy(p.recentEvents, p.recentEvents[1:])
-		p.recentEvents = p.recentEvents[:p.maxRecentCount]
+	for _, event := range events {
+		p.addEvent(event)
 	}
 }
 
@@ -186,6 +173,33 @@ func (p *Predictor) GetTypicalLoad(t time.Time) float64 {
 	}
 
 	return p.fallbackPrediction(int(dayType))
+}
+
+// addEvent adds a new event to the predictor and updates the statistics, should be called with lock held.
+func (p *Predictor) addEvent(event databaser.Event) {
+	dayType := p.getDayType(event.Timestamp)
+	hour := event.Timestamp.Hour()
+	stats := p.stats[dayType][hour]
+
+	if !stats.LastUpdate.IsZero() {
+		daysSinceUpdate := event.Timestamp.Sub(stats.LastUpdate).Hours() / hoursInDay
+		if daysSinceUpdate > 0 {
+			decayFactor := math.Exp(-p.decayLambda * daysSinceUpdate)
+			stats.WeightedSum *= decayFactor
+			stats.TotalWeight *= decayFactor
+		}
+	}
+
+	stats.WeightedSum += event.FloatLoad()
+	stats.TotalWeight += 1.0
+	stats.Count++
+	stats.LastUpdate = event.Timestamp
+
+	p.recentEvents = append(p.recentEvents, event)
+	if len(p.recentEvents) > p.maxRecentCount {
+		copy(p.recentEvents, p.recentEvents[1:])
+		p.recentEvents = p.recentEvents[:p.maxRecentCount]
+	}
 }
 
 // getDayType determines the DayType for the given time.

@@ -21,6 +21,8 @@ url = ""  # XML http(s) url to data source, year is <YEAR> string
 [predictor]
 active = true
 hours = 4
+load_size = 1000
+query_timeout = 10  # in seconds
 
 [telegram]
 active = true

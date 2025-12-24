@@ -57,8 +57,11 @@ type Holidayer struct {
 
 // Predictor contains predictor configuration.
 type Predictor struct {
-	Hours  uint8 `toml:"hours"`
-	Active bool  `toml:"active"`
+	Hours        uint8         `toml:"hours"`
+	Active       bool          `toml:"active"`
+	LoadSize     int           `toml:"load_size"`
+	Timeout      time.Duration `toml:"-"`
+	QueryTimeout int           `toml:"query_timeout"`
 }
 
 // Telegram contains Telegram bot configuration.
@@ -195,6 +198,13 @@ func (p *Predictor) validate() error {
 	if p.Hours < 1 || p.Hours > 24 {
 		return errors.New("hours must be between 1 and 24")
 	}
+	if p.LoadSize < 1 {
+		return errors.New("load_size must be greater than zero")
+	}
+	if p.QueryTimeout <= 0 {
+		return errors.New("query_timeout must be greater than zero")
+	}
+	p.Timeout = time.Duration(p.QueryTimeout) * time.Second
 	return nil
 }
 

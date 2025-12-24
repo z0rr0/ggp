@@ -47,8 +47,8 @@ func newTestDB(t *testing.T) *databaser.DB {
 		t.Fatalf("failed to create test database: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("failed to close test database: %v", err)
+		if closeErr := db.Close(); closeErr != nil {
+			t.Errorf("failed to close test database: %v", closeErr)
 		}
 	})
 	return db
@@ -60,6 +60,14 @@ func newTestConfig(adminIDs ...int64) *config.Config {
 			TimeLocation: time.UTC,
 			AdminIDs:     make(map[int64]struct{}),
 			Admins:       adminIDs,
+		},
+		Database: config.Database{
+			Timeout: 5 * time.Second,
+		},
+		Predictor: config.Predictor{
+			Hours:    6,
+			LoadSize: 100,
+			Timeout:  5 * time.Second,
 		},
 	}
 	for _, id := range adminIDs {
@@ -74,8 +82,13 @@ func newTestController(t *testing.T, db *databaser.DB) *predictor.Controller {
 		Base: config.Base{
 			TimeLocation: time.UTC,
 		},
+		Database: config.Database{
+			Timeout: 5 * time.Second,
+		},
 		Predictor: config.Predictor{
-			Hours: 6,
+			Hours:    6,
+			LoadSize: 100,
+			Timeout:  5 * time.Second,
 		},
 	}
 	ctx := context.Background()

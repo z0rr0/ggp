@@ -15,6 +15,8 @@ type Controller struct {
 	predictor *Predictor
 	eventCh   <-chan databaser.Event
 	Hours     uint8
+	loadSize  int
+	timeout   time.Duration
 }
 
 // Run initializes and returns a new Controller with the predictor and event channel.
@@ -28,6 +30,8 @@ func Run(ctx context.Context, db *databaser.DB, eventCh <-chan databaser.Event, 
 		predictor: New(holidayChecker),
 		eventCh:   eventCh,
 		Hours:     cfg.Predictor.Hours,
+		loadSize:  cfg.Predictor.LoadSize,
+		timeout:   cfg.Predictor.Timeout,
 	}
 
 	// load events from the database
@@ -69,23 +73,18 @@ func (c *Controller) Run(ctx context.Context) <-chan struct{} {
 
 // LoadEvents loads historical events from the database into the predictor.
 func (c *Controller) LoadEvents(ctx context.Context, db *databaser.DB) error {
-	const limit = 1000
 	var n, offset int
 
 	for {
-		events, err := db.GetAllEvents(ctx, limit, offset)
+		events, err := c.loadEventsBatch(ctx, db, offset)
 		if err != nil {
-			return fmt.Errorf("GetAllEvents: %w", err)
+			return fmt.Errorf("load events batch: %w", err)
 		}
-
 		if n = len(events); n == 0 {
 			break
 		}
 		slog.DebugContext(ctx, "got events", "events", n)
-
-		for _, event := range events {
-			c.predictor.AddEvent(event)
-		}
+		c.predictor.AddEvents(events)
 
 		offset += n
 		slog.DebugContext(ctx, "add events", "offset", offset)
@@ -107,4 +106,17 @@ func (c *Controller) PredictLoad(hours uint8) []databaser.Event {
 	}
 
 	return events
+}
+
+// loadEventsBatch loads a batch of events from the database starting from the given offset.
+func (c *Controller) loadEventsBatch(ctx context.Context, db *databaser.DB, offset int) ([]databaser.Event, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	events, err := db.GetAllEvents(ctx, c.loadSize, offset)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllEvents: %w", err)
+	}
+
+	return events, nil
 }

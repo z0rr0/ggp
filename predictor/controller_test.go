@@ -35,7 +35,9 @@ func TestRun(t *testing.T) {
 			TimeLocation: time.UTC,
 		},
 		Predictor: config.Predictor{
-			Hours: 24,
+			Hours:    24,
+			LoadSize: 100,
+			Timeout:  3 * time.Second,
 		},
 	}
 
@@ -94,6 +96,8 @@ func TestController_Run(t *testing.T) {
 				predictor: New(newMockHolidayChecker()),
 				eventCh:   eventCh,
 				Hours:     24,
+				loadSize:  100,
+				timeout:   3 * time.Second,
 			}
 
 			doneCh := controller.Run(ctx)
@@ -115,6 +119,8 @@ func TestController_Run_ContextCancellation(t *testing.T) {
 		predictor: New(newMockHolidayChecker()),
 		eventCh:   eventCh,
 		Hours:     24,
+		loadSize:  100,
+		timeout:   3 * time.Second,
 	}
 
 	doneCh := controller.Run(ctx)
@@ -153,6 +159,8 @@ func TestController_LoadEvents(t *testing.T) {
 	controller := &Controller{
 		predictor: New(newMockHolidayChecker()),
 		Hours:     24,
+		loadSize:  100,
+		timeout:   3 * time.Second,
 	}
 
 	if err := controller.LoadEvents(ctx, db); err != nil {
@@ -176,6 +184,8 @@ func TestController_LoadEvents_Empty(t *testing.T) {
 	controller := &Controller{
 		predictor: New(newMockHolidayChecker()),
 		Hours:     24,
+		loadSize:  100,
+		timeout:   3 * time.Second,
 	}
 
 	if err := controller.LoadEvents(ctx, db); err != nil {
@@ -191,6 +201,8 @@ func TestController_PredictLoad(t *testing.T) {
 	controller := &Controller{
 		predictor: New(newMockHolidayChecker()),
 		Hours:     12,
+		loadSize:  100,
+		timeout:   3 * time.Second,
 	}
 
 	baseTime := time.Now().UTC().Truncate(time.Hour)
@@ -237,6 +249,8 @@ func TestController_PredictLoad_CurrentTime(t *testing.T) {
 	controller := &Controller{
 		predictor: New(newMockHolidayChecker()),
 		Hours:     1,
+		loadSize:  100,
+		timeout:   3 * time.Second,
 	}
 
 	events := controller.PredictLoad(1)
